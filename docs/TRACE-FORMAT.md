@@ -17,13 +17,28 @@ have predicted:
 Order is part of the trace. Two traces are equal when their `(kind, payload)` sequences are
 equal, element for element. Timestamps are *not* part of that comparison — see below.
 
-**The oracle currently writes `0` as the interrupt payload.** Renode's interrupt hook takes a
-line of Python, and none of the examples shipped with Renode reference a variable inside one,
-so which names are in scope there is not something to guess at: an earlier attempt at
-`exceptionIndex` raised after the hook had already created the output file, which produced an
-empty trace and a confusing failure. The run now writes the hook's visible names to a
-`.names` file alongside the trace, and the payload gets filled in once that has been read.
-Only one interrupt source is enabled, so the count is meaningful in the meantime.
+## Writing hooks that survive Renode
+
+The oracle is four lines of Python embedded in a Renode script, and every one of the
+constraints below cost a debugging round to find. They are recorded here because the failure
+modes are all silent — the run completes, the trace parses, and the numbers are wrong.
+
+- **No backslashes.** The monitor tokenises the line before Python sees it. Use `chr(10)`.
+- **No semicolons.** The monitor splits commands on them even inside a quoted string, so the
+  usual `f=open(...); f.write(...); f.close()` becomes three broken commands. Use `with`.
+- **Close the file explicitly.** IronPython finalises through the .NET GC, not by reference
+  counting, so `open(path,'a').write(...)` leaves the handle unreferenced and unflushed. The
+  file is created and stays empty, which parses cleanly as zero events.
+- **`offset` is not in scope** for a peripheral read hook; `value` is. That is why the sensor
+  and the jitter register are two peripherals rather than one with two offsets.
+- **`exceptionIndex` is** in scope for an interrupt hook, along with `machine`, `self`,
+  `monitor` and `emulationManager`. Confirmed by having the hook write `dir()` to a file
+  rather than by guessing, which is still what `verify_oracle.py` prints on every run.
+
+One more, on the firmware side rather than the hook: emulation continues after `main()` has
+printed. A timer left running keeps feeding the ISR, and the oracle keeps recording reads the
+firmware is no longer counting — the totals then differ by however long the run happened to
+last. The firmware stops the tick and masks the interrupt before it snapshots its counters.
 
 Everything else about a run — every branch, every store, the control output — follows from
 the firmware image plus this sequence. That is the claim the whole project rests on, and

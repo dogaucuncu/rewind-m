@@ -60,6 +60,19 @@ failure), which is the evidence that the peripheral behaviour really had been di
 Anything measured before that fix is retracted rather than deleted: knowing a number was
 wrong, and why, is worth more than a clean table.
 
+## Oracle agreement (M2)
+
+Per push, five seeds, comparing the emulator's independent event count against the totals the
+firmware reports for itself:
+
+| Date | Seeds | Sensor reads | Jitter reads | Interrupts | Result |
+|---|---|---|---|---|---|
+| 2026-08-12 | 5 | 209 = 209 | 200 = 200 | 200 = 200 | agree exactly |
+
+209 is 8 self-test samples, 1 priming read and one per tick. There is no recorder to diff
+against yet — this is the strongest check available until M3, and it is what caught the
+firmware reporting its counters while the timer was still running.
+
 ## How many seeds a claim needs
 
 A rate around 2% needs a few hundred seeds before it means anything. Rough guide, for
