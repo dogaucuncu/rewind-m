@@ -1,29 +1,88 @@
-/* M0 smoke test.
+/* M1: a depth-hold control loop with a deliberate, intermittent race.
  *
- * Proves the four things the rest of the project is built on, and nothing more:
- *   1. the firmware boots and reaches main()
- *   2. USART1 output reaches the host
- *   3. the DWT cycle counter advances (the recorder's timestamp source)
- *   4. the simulated depth sensor returns values the firmware cannot predict
+ * The TIM2 ISR samples the depth sensor and publishes it as a two-word value:
+ * the sample and its bitwise complement. Publishing is NOT atomic. The control
+ * loop reads the first word, spends a few cycles computing, then reads the
+ * second. If the ISR lands in that gap, the loop sees one word from tick N and
+ * the other from tick N+1, and the consistency check fails.
  *
- * The control loop, the deliberate race and the recorder arrive in M1 and M3. */
+ * This is the shape of bug this project exists for: it depends entirely on where
+ * an interrupt landed relative to the main loop, so it appears in a small
+ * fraction of runs and vanishes under a debugger.
+ *
+ * The firmware reports what happened; tools/campaign.py runs many seeds and
+ * measures how often it happens. No number about the failure rate is written
+ * down anywhere that was not measured.
+ */
 
 #include <stdint.h>
 #include "hal.h"
 
-#define SENSOR_SAMPLES 8u
+/* ---- self-test ---------------------------------------------------------- */
+#define SELFTEST_SAMPLES 8u
 
-int main(void)
+/* ---- control loop ------------------------------------------------------- */
+#define TARGET_TICKS  200u        /* ISR ticks per run */
+#define TICK_BASE     2000u       /* TIM2 runs at 10 MHz -> 200 us base period */
+#define JITTER_MASK   0x1FFu      /* plus 0..511 ticks of seeded jitter */
+#define SETPOINT      2048
+#define KP            4
+#define KI            1
+
+/* Bounds the run even if TIM2 never fires, so a broken timer model shows up as
+ * a reported failure instead of a CI job that hangs until the runner times out. */
+#define MAX_ITERS     20000000u
+
+/* Published by the ISR, consumed by the control loop. Two words that are only
+ * consistent if they were written by the same tick. */
+static volatile uint32_t g_depth;
+static volatile uint32_t g_depth_inv;
+static volatile uint32_t g_ticks;
+
+void TIM2_IRQHandler(void);
+
+void TIM2_IRQHandler(void)
+{
+    uint32_t d;
+
+    TIM2_SR = ~TIM_SR_UIF;
+
+    d = SENSOR_DR;
+
+    g_depth = d;
+    /* The bug. A reader scheduled between these two stores observes a torn
+     * pair. Disabling interrupts around them, or publishing through a single
+     * word, would both fix it. */
+    g_depth_inv = ~d;
+
+    /* Variable-rate sampling: the next period carries seeded jitter, so the ISR
+     * does not stay phase-locked to the control loop. */
+    TIM2_ARR = TICK_BASE + (JITTER_DR & JITTER_MASK);
+
+    g_ticks++;
+}
+
+static void tim2_init(void)
+{
+    RCC_APB1ENR |= RCC_APB1ENR_TIM2EN;
+    TIM2_PSC = 0u;
+    TIM2_ARR = TICK_BASE;
+    TIM2_DIER = TIM_DIER_UIE;
+    TIM2_CR1 = TIM_CR1_CEN;
+    nvic_enable(IRQ_TIM2);
+}
+
+/* Checks the instrumentation the rest of the project depends on: the cycle
+ * counter is running and the sensor is actually varying. Both are silent
+ * failure modes that would invalidate every trace taken afterwards. */
+static void selftest(void)
 {
     uint32_t before, after, i;
-
-    uart_init();
-    dwt_init();
 
     uart_puts("rewind-m M0 smoke test\r\n");
 
     before = dwt_cycles();
-    for (i = 0u; i < SENSOR_SAMPLES; i++) {
+    for (i = 0u; i < SELFTEST_SAMPLES; i++) {
         uint32_t sample = SENSOR_DR;
         uart_puts("sensor[");
         uart_put_u32(i);
@@ -38,11 +97,77 @@ int main(void)
     uart_puts("\r\n");
 
     if (after == before) {
-        /* A stuck cycle counter would silently break every timestamp in the
-         * trace, so it fails loudly here rather than later. */
         uart_puts("FAIL dwt_stuck\r\n");
     } else {
         uart_puts("M0 OK\r\n");
+    }
+}
+
+int main(void)
+{
+    uint32_t iters = 0u;
+    uint32_t torn = 0u;
+    int32_t integral = 0;
+    int32_t control_sum = 0;
+
+    uart_init();
+    dwt_init();
+
+    selftest();
+
+    tim2_init();
+
+    while (g_ticks < TARGET_TICKS) {
+        uint32_t depth;
+        uint32_t depth_inv;
+        int32_t error;
+        int32_t control;
+
+        depth = g_depth;
+
+        /* The window. Real work, not padding: this is what a depth-hold PI
+         * controller costs, and its duration is what makes the race rare
+         * rather than constant. */
+        error = SETPOINT - (int32_t)depth;
+        integral += error;
+        if (integral > 100000) {
+            integral = 100000;
+        } else if (integral < -100000) {
+            integral = -100000;
+        }
+        control = (KP * error) + ((KI * integral) >> 4);
+        control_sum += control >> 8;
+
+        depth_inv = g_depth_inv;
+
+        if (depth != (uint32_t)~depth_inv) {
+            torn++;
+        }
+
+        iters++;
+        if (iters >= MAX_ITERS) {
+            uart_puts("RUN FAIL no_ticks\r\n");
+            for (;;) {
+            }
+        }
+    }
+
+    uart_puts("control ticks=");
+    uart_put_u32(g_ticks);
+    uart_puts(" iters=");
+    uart_put_u32(iters);
+    uart_puts(" torn=");
+    uart_put_u32(torn);
+    uart_puts(" checksum=");
+    uart_put_hex32((uint32_t)control_sum);
+    uart_puts("\r\n");
+
+    if (torn == 0u) {
+        uart_puts("RUN OK\r\n");
+    } else {
+        uart_puts("RUN FAIL torn=");
+        uart_put_u32(torn);
+        uart_puts("\r\n");
     }
 
     for (;;) {

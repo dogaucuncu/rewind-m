@@ -91,13 +91,15 @@ static inline uint32_t dwt_cycles(void)
     return DWT_CYCCNT;
 }
 
-/* ---- Depth sensor (simulated peripheral) --------------------------------
- * A memory-mapped 32-bit sensor sample register. Backed in simulation by a
- * seeded Python peripheral; on real hardware this address would be an ADC data
- * register. Reading it is non-deterministic by construction — this is the main
- * input the recorder has to capture. */
+/* ---- Simulated world ----------------------------------------------------
+ * Two memory-mapped registers whose values the firmware cannot predict. Backed
+ * in simulation by a seeded Python peripheral; on real hardware SENSOR_DR would
+ * be an ADC data register and the jitter would come from the physical world
+ * rather than a register. Reading either is non-deterministic by construction —
+ * these are the inputs the recorder has to capture. */
 #define SENSOR_BASE     0x50000000u
 #define SENSOR_DR       REG32(SENSOR_BASE + 0x00u)
+#define JITTER_DR       REG32(SENSOR_BASE + 0x04u)
 
 void uart_init(void);
 void uart_putc(char c);
