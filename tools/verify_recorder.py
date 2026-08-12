@@ -17,6 +17,7 @@ be made in either direction.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import os
 import pathlib
 import re
@@ -32,6 +33,8 @@ DEFAULT_WORK = REPO / "build" / "recorder"
 
 COST_RE = re.compile(r"^recorder cycles_per_event=(\d+) capacity=(\d+)$", re.MULTILINE)
 TRACE_RE = re.compile(r"^trace bytes=(\d+) dropped=(\d+)$", re.MULTILINE)
+
+
 def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     seed_dir = work / str(seed)
     seed_dir.mkdir(parents=True, exist_ok=True)
@@ -141,13 +144,22 @@ def main() -> int:
     parser.add_argument("--renode-dir", default=os.environ.get("RENODE_DIR"))
     parser.add_argument("--run-for", default="0.2")
     parser.add_argument("--work", type=pathlib.Path, default=DEFAULT_WORK)
+    parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     args = parser.parse_args()
 
     renode = find_renode(args.renode_dir)
     status = 0
+    seeds = list(range(args.start, args.start + args.count))
 
-    for seed in range(args.start, args.start + args.count):
-        result = run_one(renode, seed, args.work, args.run_for)
+    # Each seed is an independent Renode process, so the only reason this was
+    # serial was that nobody had needed more than five of them.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        results = list(pool.map(
+            lambda seed: run_one(renode, seed, args.work, args.run_for), seeds
+        ))
+
+    for result in results:
+        seed = result["seed"]
         if result["problems"]:
             status = 1
             print(f"seed {seed}: FAIL")

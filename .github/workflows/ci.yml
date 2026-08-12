@@ -53,6 +53,13 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Runs before anything is downloaded: these need only Python, and they are
+      # what proves the comparator can reject a difference at all. Without them
+      # a comparator that always returned "equal" would leave CI green and every
+      # claim in the README meaningless.
+      - name: Unit tests
+        run: python tests/test_trace_format.py
+
       # Renode is installed OUTSIDE the workspace. It used to be unpacked into
       # ./renode, which is also where this project's own peripheral scripts
       # live, so the cache covered them: the archive saved on the first green
@@ -116,7 +123,17 @@ jobs:
       - name: Verify recorder against oracle
         env:
           RENODE_DIR: ${{ runner.temp }}/renode
-        run: python tools/verify_recorder.py --count 5
+        run: python tools/verify_recorder.py --count 20 --jobs 4
+
+      # The overflow path was written in M3 and had never executed. This builds
+      # with an undersized buffer on purpose and asserts the whole chain fires:
+      # events dropped, trace flagged truncated, gap record written, and the
+      # comparison refusing to call the result a match. It restores the normal
+      # build before returning.
+      - name: Verify overflow handling
+        env:
+          RENODE_DIR: ${{ runner.temp }}/renode
+        run: python tools/verify_overflow.py
 
       # Every push runs a short campaign. It deliberately does NOT assert a
       # failure rate: at the measured 1.75%, a 100-seed run sees zero failures
@@ -157,4 +174,6 @@ jobs:
             logs/
             snapshots/
             build/campaign.json
+            build/recorder/**/*.trace
+            build/overflow/**/*.trace
           if-no-files-found: ignore

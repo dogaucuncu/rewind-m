@@ -133,19 +133,29 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     }
 
 
-def rebuild(control_work: int) -> None:
-    """Rebuild the firmware with a given CONTROL_WORK, for sweeps."""
+def rebuild_with(extra_cflags: str = "") -> None:
+    """Rebuild the firmware from clean with extra compiler flags.
+
+    Shared with the overflow test, which needs a deliberately undersized trace
+    buffer. Always builds from clean: a stale object file compiled with
+    different flags is exactly the kind of thing that makes a measurement quietly
+    describe the wrong binary.
+    """
     subprocess.run(
         ["make", "-C", str(REPO / "firmware"), "clean"],
         check=True, capture_output=True, text=True,
     )
-    proc = subprocess.run(
-        ["make", "-C", str(REPO / "firmware"),
-         f"EXTRA_CFLAGS=-DCONTROL_WORK={control_work}"],
-        capture_output=True, text=True,
-    )
+    args = ["make", "-C", str(REPO / "firmware")]
+    if extra_cflags:
+        args.append(f"EXTRA_CFLAGS={extra_cflags}")
+    proc = subprocess.run(args, capture_output=True, text=True)
     if proc.returncode != 0:
-        raise SystemExit(f"build failed for CONTROL_WORK={control_work}:\n{proc.stderr}")
+        raise SystemExit(f"build failed for {extra_cflags or 'defaults'}:\n{proc.stderr}")
+
+
+def rebuild(control_work: int) -> None:
+    """Rebuild the firmware with a given CONTROL_WORK, for sweeps."""
+    rebuild_with(f"-DCONTROL_WORK={control_work}")
 
 
 def run_seeds(renode: str, seeds: list[int], args) -> list[dict]:
