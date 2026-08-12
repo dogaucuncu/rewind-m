@@ -80,6 +80,7 @@ event against the emulator's independent record of the same run:
 
 | Date | Seeds | Events | Result | Trace bytes | Cycles/event | Bytes per 1k instructions |
 |---|---|---|---|---|---|---|
+| 2026-08-12 | 20 | 609 | match | 3635–3644 | 94 | 0.79–0.80 |
 | 2026-08-12 | 5 | 609 | match | 3635–3642 | 94 | 0.79–0.80 |
 
 609 events is 209 sensor reads, 200 jitter reads and 200 interrupts. Interrupt payloads are
@@ -94,6 +95,19 @@ would mean implementing the compressions and measuring again rather than arguing
 
 Cycles per event is measured in isolation before the run, driving the recorder in a loop, so
 it includes that loop and is an upper bound.
+
+## What the gates are worth (M4)
+
+A green check means nothing until it has been shown capable of going red. Both of these
+now have been:
+
+| Gate | What proves it can fail |
+|---|---|
+| Trace comparison | 22 unit tests, including that it rejects a dropped event, a reordered pair, a changed payload, a short tail and an extra event — and that it still catches a missing interrupt despite ignoring interrupt payloads |
+| Recorder overflow handling | A build with a 512-byte buffer, run in CI: events are dropped, the truncated flag is set, exactly one gap record carries the firmware's own count, and the comparison refuses to call the result a match |
+
+The overflow path had been written in M3 and had never once executed. It works, but that
+was not knowable until it was made to run.
 
 ## How many seeds a claim needs
 

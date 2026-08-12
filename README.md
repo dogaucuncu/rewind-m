@@ -10,11 +10,12 @@ reproducible on demand.
 No hardware required. Everything runs on [Renode](https://renode.io/); `make` and one
 command gets you a running target.
 
-> **Status: M3 — recording works and is verified.** There is a firmware with a real
-> intermittent race, a recorder inside it, and an emulator-side oracle that proves the
-> recorder misses nothing. Nothing is replayed yet; the replay engine is M5. Every number
-> below was measured by a tool in this repository, and the ones that turned out worse than
-> the prior art say so. See [Milestones](#milestones).
+> **Status: M4 — recording is verified, and the verification is itself tested.** There is a
+> firmware with a real intermittent race, a recorder inside it, an emulator-side oracle that
+> proves the recorder misses nothing, and evidence that both of those checks can fail when
+> they should. Nothing is replayed yet; the replay engine is M5. Every number below was
+> measured by a tool in this repository, and the ones that turned out worse than the prior
+> art say so. See [Milestones](#milestones).
 
 ## Why this exists
 
@@ -89,9 +90,18 @@ TARDIS reports 0.5 bytes per thousand instructions; this recorder is at 0.80, wi
 of the two specified compressions implemented yet. Different workloads, so it is indicative
 rather than a benchmark — but the direction is stated the way it came out.
 
+A green check is worth nothing until it has been shown capable of going red, so both of
+these are tested rather than trusted. Twenty-two unit tests prove the comparison rejects a
+dropped event, a reordered pair, a changed payload, a short tail and an extra event. And the
+recorder's overflow path — written in M3, never once executed — is now run deliberately in
+CI with an undersized buffer, which must produce dropped events, a truncated flag, a gap
+record carrying the firmware's own count, and a comparison that refuses to call it a match.
+
 ```bash
-python tools/verify_recorder.py --count 5   # diff recorder against oracle
-python tools/verify_oracle.py --count 5     # oracle against the firmware's own counts
+python tests/test_trace_format.py            # can the comparison say no?
+python tools/verify_recorder.py --count 20   # diff recorder against oracle
+python tools/verify_overflow.py              # make it overflow on purpose
+python tools/verify_oracle.py --count 5      # oracle against the firmware's own counts
 ```
 
 ### Non-determinism is injected on purpose
@@ -172,7 +182,7 @@ translation libraries).
 | M1 | Deliberate race + seeded injection + N-seed campaign | done — 7/400 |
 | M2 | Oracle ground-truth recording + trace format | done |
 | M3 | In-firmware recorder + overhead measurement | done |
-| M4 | Differential validation as a CI gate | |
+| M4 | Differential validation as a CI gate | done |
 | M5 | Replay engine + divergence detector | |
 | M6 | Documentation, related work, demo | |
 
