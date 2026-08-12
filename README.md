@@ -76,8 +76,8 @@ did you test your recorder against?" has an answer.
 Both sides exist now, and CI diffs them on every push:
 
 ```
-5 seeds, 609 events each, matched exactly
-trace 3637 bytes · 94 cycles per event · 0.80 bytes per thousand instructions
+20 seeds, 609 events each, matched exactly
+trace 3635-3644 bytes · 94 cycles per event · 0.80 bytes per thousand instructions
 ```
 
 A dropped, reordered or mangled event moves the sequences apart and the build fails, naming
