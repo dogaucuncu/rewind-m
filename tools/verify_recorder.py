@@ -32,30 +32,6 @@ DEFAULT_WORK = REPO / "build" / "recorder"
 
 COST_RE = re.compile(r"^recorder cycles_per_event=(\d+) capacity=(\d+)$", re.MULTILINE)
 TRACE_RE = re.compile(r"^trace bytes=(\d+) dropped=(\d+)$", re.MULTILINE)
-INSTR_MARKER = "INSTRUCTIONS_BEGIN"
-
-
-def parse_instructions(console: str) -> tuple[int | None, str]:
-    """Pull the executed-instruction count out of Renode's console output.
-
-    The monitor echoes commands as well as their results and pads with prompts,
-    so rather than assume a layout this scans forward from the marker for the
-    first standalone integer. Returns the tail it looked at as well, so a miss
-    reports what was actually there instead of just 'unknown'.
-    """
-    index = console.find(INSTR_MARKER)
-    if index < 0:
-        return None, ""
-    tail = console[index + len(INSTR_MARKER):index + len(INSTR_MARKER) + 400]
-    for token in re.findall(r"\d[\d,]*", tail):
-        value = int(token.replace(",", ""))
-        # Guard against picking up a timestamp or a port number: a run executes
-        # far more instructions than that.
-        if value > 10000:
-            return value, tail
-    return None, tail
-
-
 def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     seed_dir = work / str(seed)
     seed_dir.mkdir(parents=True, exist_ok=True)
@@ -94,9 +70,21 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
 
     cost = COST_RE.search(uart)
     stats = TRACE_RE.search(uart)
-    instructions, instr_tail = parse_instructions(
-        (proc.stdout or "") + (proc.stderr or "")
-    )
+
+    # Instructions executed as of the last recorded event, written by a CPU hook.
+    # That is the denominator the size figure wants: it covers the recorded run
+    # and excludes the trace flush, which is not part of recording.
+    instructions = None
+    instr_tail = ""
+    insn_file = oracle_out.with_suffix(".insn")
+    if insn_file.exists():
+        text = insn_file.read_text(encoding="ascii", errors="replace").strip()
+        if text.isdigit():
+            instructions = int(text)
+        else:
+            instr_tail = f"unparsable instruction count {text!r}"
+    else:
+        instr_tail = "no .insn file - the CPU hook did not run"
 
     result.update(
         device_events=len(device),

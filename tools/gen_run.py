@@ -90,10 +90,6 @@ machine LoadPlatformDescription @{platform}
 sysbus LoadELF @{elf}
 sysbus.usart2 CreateFileBackend @{uart_out}
 {oracle}emulation RunFor "{run_for}"
-# Instruction count for the size figure. Reported in bytes per thousand
-# instructions, the unit TARDIS uses, so the two can be compared directly.
-echo INSTRUCTIONS_BEGIN
-sysbus.cpu ExecutedInstructions
 quit
 """
 
@@ -118,6 +114,7 @@ sysbus SetHookAfterPeripheralRead sysbus.sensor "with open(r'{oracle_out}','a') 
 sysbus SetHookAfterPeripheralRead sysbus.jitter "with open(r'{oracle_out}','a') as f: f.write('J %d' % value + chr(10))"
 sysbus.cpu AddHookAtInterruptBegin "with open(r'{oracle_out}','a') as f: f.write('I %d' % exceptionIndex + chr(10))"
 sysbus.cpu AddHookAtInterruptBegin "with open(r'{diag_out}','w') as f: f.write(' '.join(sorted(dir())) + chr(10))"
+sysbus.cpu AddHookAtInterruptBegin "with open(r'{insn_out}','w') as f: f.write(str(self.ExecutedInstructions))"
 """
 
 DEFAULT_ELF = REPO / "firmware" / "build" / "rewind-m.elf"
@@ -178,6 +175,12 @@ def generate_resc(
             # own examples never use a variable there, so rather than guess at
             # `exceptionIndex` and get an empty trace again, the run reports it.
             diag_out=resolved.with_suffix(".names").as_posix(),
+            # Instruction count as of the last recorded event, written through
+            # the one mechanism already proven to work here. `echo` is not a
+            # monitor command, which is how the previous attempt failed, and
+            # the count this produces is the better denominator anyway: it
+            # excludes the trace flush, which is not part of recording.
+            insn_out=resolved.with_suffix(".insn").as_posix(),
         )
 
     resc_path = out_dir / f"run_{seed}.resc"
