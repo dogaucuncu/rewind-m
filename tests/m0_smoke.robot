@@ -10,7 +10,10 @@ Test Teardown     Test Teardown
 Resource          ${RENODEKEYWORDS}
 
 *** Variables ***
-${SEED}           20260812
+# From the environment, set by scripts/test.sh. Not repeated here: a second copy
+# of the seed is a second copy that can drift from the one used to generate the
+# platform file.
+${SEED}           %{SEED}
 ${PLATFORM}       ${CURDIR}/../build/gen/rewind_${SEED}.repl
 ${ELF}            ${CURDIR}/../firmware/build/rewind-m.elf
 ${UART}           sysbus.usart2

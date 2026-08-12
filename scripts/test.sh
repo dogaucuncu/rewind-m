@@ -11,7 +11,12 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SEED="${SEED:-20260812}"
+
+# Single source of truth for the seed. It is exported so the Robot suites read
+# it from the environment instead of each repeating the number - two copies of a
+# constant are two copies that can disagree, and a suite looking for a platform
+# file nobody generated is a confusing way to find that out.
+export SEED="${SEED:-20260812}"
 
 if [[ $# -gt 0 ]]; then
     SUITES=("$@")

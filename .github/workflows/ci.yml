@@ -14,15 +14,29 @@ on:
         description: 'Seeds per measurement point'
         default: '400'
 
+# The repository default is already read-only, but a workflow should not depend
+# on a setting someone can change from a web page.
+permissions:
+  contents: read
+
 env:
   RENODE_VERSION: 1.16.1
+  # SHA-256 of renode-1.16.1.linux-portable-dotnet.tar.gz, from the GitHub
+  # release asset digest. CI executes this archive, so it is verified before it
+  # is unpacked rather than trusted because the URL looked right.
+  RENODE_SHA256: 00e113cdbd0f5354cf2f64bbe3f5a070d8958409542fca66e45ac97d982938c0
+  # Single source of truth for the seed. scripts/test.sh passes it through to
+  # the Robot suites, which read it from the environment rather than repeating
+  # the number.
   SEED: 20260812
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Actions are pinned to commit SHAs, not tags: a tag can be moved to point
+      # at different code without anything here changing.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install ARM toolchain
         run: |
@@ -35,7 +49,7 @@ jobs:
       - name: Report firmware size
         run: make -C firmware size
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
 
@@ -44,24 +58,26 @@ jobs:
       # live, so the cache covered them: the archive saved on the first green
       # run carried renode/sensor.py, and every later run restored that stale
       # copy over the checkout. Nothing failed - the old script just answered
-      # every offset with a sensor sample - so the measurements were quietly
-      # taken against code that was not in the tree. Keeping the installation
-      # out of the repository makes that class of bug impossible rather than
-      # fixed.
+      # every offset with a sensor sample - so measurements were quietly taken
+      # against code that was not in the tree. Keeping the installation out of
+      # the repository makes that class of bug impossible rather than fixed.
       - name: Cache Renode
         id: cache-renode
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/renode
           key: renode-${{ env.RENODE_VERSION }}-linux-portable-dotnet-v2
 
-      - name: Download Renode
+      - name: Download and verify Renode
         if: steps.cache-renode.outputs.cache-hit != 'true'
         run: |
-          curl -fsSL -o "${RUNNER_TEMP}/renode.tar.gz" \
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/renode.tar.gz"
+          curl -fsSL -o "${archive}" \
             "https://github.com/renode/renode/releases/download/v${RENODE_VERSION}/renode-${RENODE_VERSION}.linux-portable-dotnet.tar.gz"
+          echo "${RENODE_SHA256}  ${archive}" | sha256sum --check --strict
           mkdir -p "${RUNNER_TEMP}/renode"
-          tar xf "${RUNNER_TEMP}/renode.tar.gz" -C "${RUNNER_TEMP}/renode" --strip-components=1
+          tar xf "${archive}" -C "${RUNNER_TEMP}/renode" --strip-components=1
 
       - name: Install test dependencies
         run: pip install -r "${RUNNER_TEMP}/renode/tests/requirements.txt"
@@ -85,36 +101,35 @@ jobs:
         run: scripts/test.sh
 
       # Every push runs a short campaign. It deliberately does NOT assert a
-      # failure rate: at a rate of a few percent, a 100-seed run sees zero
-      # failures often enough that such a gate would flake, and a flaky gate
-      # teaches people to ignore CI. What is asserted is that every run produced
-      # a verdict - a run we cannot read is a harness failure, not a pass.
+      # failure rate: at the measured 1.75%, a 100-seed run sees zero failures
+      # about 17% of the time, and a gate that flakes teaches people to ignore
+      # CI. What is asserted is that every run produced a verdict - a run we
+      # cannot read is a harness failure, not a pass.
       #
-      # The headline number comes from the larger workflow_dispatch run.
+      # The 400-seed dispatch run is large enough to assert the race is still
+      # reachable: at 1.75%, seeing nothing in 400 runs has probability 0.9825^400,
+      # under one in a thousand.
       - name: Measure race failure rate
         env:
           RENODE_DIR: ${{ runner.temp }}/renode
           CAMPAIGN_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.count || '100' }}
           CAMPAIGN_SWEEP: ${{ github.event_name == 'workflow_dispatch' && inputs.sweep || false }}
         run: |
+          set -euo pipefail
+          args=(--jobs 4 --run-for 0.2 --report build/campaign.json)
           if [[ "${CAMPAIGN_SWEEP}" == "true" ]]; then
-            python tools/campaign.py \
-              --sweep 0,64,512,4096 \
-              --count "${CAMPAIGN_COUNT}" \
-              --jobs 4 \
-              --run-for 0.2 \
-              --report build/campaign.json
+            args+=(--sweep 0,64,512,4096 --count "${CAMPAIGN_COUNT}")
           else
-            python tools/campaign.py \
-              --count "${CAMPAIGN_COUNT}" \
-              --jobs 4 \
-              --run-for 0.2 \
-              --report build/campaign.json
+            args+=(--count "${CAMPAIGN_COUNT}")
+            if [[ "${CAMPAIGN_COUNT}" -ge 400 ]]; then
+              args+=(--expect-failures)
+            fi
           fi
+          python tools/campaign.py "${args[@]}"
 
       - name: Upload test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: robot-report
           path: |

@@ -33,6 +33,7 @@ OUTCOME_TORN = "torn"
 OUTCOME_NO_TICKS = "no_ticks"
 OUTCOME_NO_VERDICT = "no_verdict"
 OUTCOME_CRASH = "renode_error"
+OUTCOME_TIMEOUT = "timeout"
 
 
 def find_renode(explicit: str | None) -> str:
@@ -93,13 +94,24 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     resc = gen_run.generate_resc(seed, seed_dir, uart_out, run_for=run_for)
 
     started = time.monotonic()
-    proc = subprocess.run(
-        [renode, "--console", "--disable-xwt", "--plain",
-         "-e", f"include @{resc.as_posix()}"],
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
+    try:
+        proc = subprocess.run(
+            [renode, "--console", "--disable-xwt", "--plain",
+             "-e", f"include @{resc.as_posix()}"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        # One wedged Renode process must not take the whole campaign with it.
+        # Losing 400 runs to an unhandled exception on run 399 is a worse
+        # outcome than recording this seed as a harness failure and moving on.
+        return {
+            "seed": seed,
+            "outcome": OUTCOME_TIMEOUT,
+            "returncode": None,
+            "seconds": round(time.monotonic() - started, 2),
+        }
     elapsed = time.monotonic() - started
 
     if not uart_out.exists():
@@ -244,7 +256,8 @@ def main() -> int:
     print(f"seeds          : {total}")
     print(f"clean runs     : {counts.get(OUTCOME_OK, 0)}")
     print(f"torn runs      : {torn}  ({rate * 100:.2f}%)")
-    for outcome in (OUTCOME_NO_TICKS, OUTCOME_NO_VERDICT, OUTCOME_CRASH):
+    for outcome in (OUTCOME_NO_TICKS, OUTCOME_NO_VERDICT, OUTCOME_CRASH,
+                    OUTCOME_TIMEOUT):
         if counts.get(outcome):
             print(f"{outcome:<15}: {counts[outcome]}")
     print(f"wall clock     : {time.monotonic() - started:.1f}s")
