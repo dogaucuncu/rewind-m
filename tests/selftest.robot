@@ -1,5 +1,5 @@
 *** Settings ***
-Documentation     M0 foundation check. Asserts the three things every later
+Documentation     Self-test check. Asserts the three things every later
 ...               milestone depends on: the firmware boots and reaches the host
 ...               over UART, the DWT cycle counter advances, and the seeded
 ...               sensor peripheral returns values the firmware cannot predict.
@@ -29,16 +29,16 @@ Create Rewind Machine
 Firmware Boots And Reports
     Create Rewind Machine
     Start Emulation
-    Wait For Line On Uart     rewind-m M0 smoke test
+    Wait For Line On Uart     rewind-m self-test
 
 Cycle Counter Advances
     [Documentation]           A stuck CYCCNT would silently corrupt every trace
-    ...                       timestamp, so it is a hard gate from M0 onward.
+    ...                       timestamp, so it is a hard gate.
     ...                       The firmware itself prints FAIL dwt_stuck if the
     ...                       counter did not move; this asserts the good path.
     Create Rewind Machine
     Start Emulation
-    Wait For Line On Uart     M0 OK
+    Wait For Line On Uart     selftest OK
 
 Sensor Returns Varying Samples
     [Documentation]           Two consecutive sensor reads must differ,

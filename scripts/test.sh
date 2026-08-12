@@ -10,6 +10,19 @@
 
 set -euo pipefail
 
+# python3 does not exist in Git Bash on Windows, which is the shell docs/SETUP.md
+# tells Windows readers to use. Pick whichever interpreter is actually here.
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON=python3
+elif command -v python >/dev/null 2>&1; then
+    PYTHON=python
+elif command -v py >/dev/null 2>&1; then
+    PYTHON=py
+else
+    echo "no python interpreter found (tried python3, python, py)" >&2
+    exit 1
+fi
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Single source of truth for the seed. It is exported so the Robot suites read
@@ -38,7 +51,7 @@ echo "==> building firmware"
 make -C "${REPO}/firmware"
 
 echo "==> generating platform for seed ${SEED}"
-python3 "${REPO}/tools/gen_run.py" --seed "${SEED}"
+"${PYTHON}" "${REPO}/tools/gen_run.py" --seed "${SEED}"
 
 echo "==> running ${#SUITES[@]} suite(s)"
 "${RENODE_TEST}" "${SUITES[@]}"

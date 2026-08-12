@@ -49,6 +49,27 @@ jitter: Python.PythonPeripheral @ sysbus 0x50000004
 """
 
 
+def _safe_path(path: pathlib.Path, what: str) -> str:
+    """Return a path fit for embedding in generated Renode code.
+
+    The generated .repl uses `filename: "..."` and the hooks use `r'...'`, so a
+    quote character in the path terminates the literal and produces a syntax
+    error in a generated file - which names the generated file, not the argument
+    that caused it. Refusing up front costs nothing and points at the real
+    cause; escaping into two different foreign syntaxes would be the fragile
+    option.
+    """
+    text = path.as_posix()
+    for bad in ("'", '"', chr(92)):
+        if bad in text:
+            raise SystemExit(
+                f"{what} contains {bad!r}: {text} — "
+                "Renode platform files and monitor hooks cannot quote it. "
+                "Use a path without quote characters or backslashes."
+            )
+    return text
+
+
 def render_sensor(seed: int, role: str) -> str:
     src = SENSOR_SRC.read_text(encoding="utf-8")
     for pattern, replacement in (
@@ -136,8 +157,8 @@ def generate(seed: int, out_dir: pathlib.Path) -> pathlib.Path:
             seed=seed,
             # Forward slashes work on both platforms; backslashes would need
             # escaping inside the .repl string literal.
-            sensor_path=sensor_path.as_posix(),
-            jitter_path=jitter_path.as_posix(),
+            sensor_path=_safe_path(sensor_path, "sensor script path"),
+            jitter_path=_safe_path(jitter_path, "jitter script path"),
         ),
         encoding="utf-8",
     )
@@ -170,18 +191,18 @@ def generate_resc(
     if oracle_out is not None:
         resolved = oracle_out.resolve()
         oracle_block = ORACLE_TEMPLATE.format(
-            oracle_out=resolved.as_posix(),
+            oracle_out=_safe_path(resolved, "oracle trace path"),
             # Written with 'w' so it keeps only the last invocation: one line
             # naming what is actually in scope inside an interrupt hook. Renode's
             # own examples never use a variable there, so rather than guess at
             # `exceptionIndex` and get an empty trace again, the run reports it.
-            diag_out=resolved.with_suffix(".names").as_posix(),
+            diag_out=_safe_path(resolved.with_suffix(".names"), "hook names path"),
             # Instruction count as of the last recorded event, written through
             # the one mechanism already proven to work here. `echo` is not a
             # monitor command, which is how the previous attempt failed, and
             # the count this produces is the better denominator anyway: it
             # excludes the trace flush, which is not part of recording.
-            insn_out=resolved.with_suffix(".insn").as_posix(),
+            insn_out=_safe_path(resolved.with_suffix(".insn"), "instruction count path"),
         )
 
     resc_path = out_dir / f"run_{seed}.resc"
@@ -272,8 +293,8 @@ def generate_replay_resc(
     platform_path = out_dir / f"replay_{tag}.repl"
     platform_path.write_text(
         REPLAY_PLATFORM_TEMPLATE.format(
-            sensor_path=sensor_path.as_posix(),
-            jitter_path=jitter_path.as_posix(),
+            sensor_path=_safe_path(sensor_path, "sensor script path"),
+            jitter_path=_safe_path(jitter_path, "jitter script path"),
         ),
         encoding="utf-8",
     )

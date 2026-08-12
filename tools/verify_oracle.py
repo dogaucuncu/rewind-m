@@ -47,7 +47,10 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     resc = gen_run.generate_resc(
         seed, seed_dir, uart_out, run_for=run_for, oracle_out=oracle_out
     )
-    proc = renode_run.run_script(renode, resc)
+    try:
+        proc = renode_run.run_script(renode, resc)
+    except renode_run.RenodeTimeout as exc:
+        return {"seed": seed, "returncode": None, "problems": [str(exc)]}
 
     result: dict = {"seed": seed, "returncode": proc.returncode, "problems": []}
 

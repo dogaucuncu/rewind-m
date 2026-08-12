@@ -97,7 +97,7 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     started = time.monotonic()
     try:
         proc = renode_run.run_script(renode, resc)
-    except subprocess.TimeoutExpired:
+    except renode_run.RenodeTimeout:
         # One wedged Renode process must not take the whole campaign with it.
         # Losing 400 runs to an unhandled exception on run 399 is a worse
         # outcome than recording this seed as a harness failure and moving on.
@@ -128,6 +128,9 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     }
 
 
+BUILD_LOCK = REPO / "firmware" / "build" / ".rebuild.lock"
+
+
 def rebuild_with(extra_cflags: str = "") -> None:
     """Rebuild the firmware from clean with extra compiler flags.
 
@@ -135,7 +138,31 @@ def rebuild_with(extra_cflags: str = "") -> None:
     buffer. Always builds from clean: a stale object file compiled with
     different flags is exactly the kind of thing that makes a measurement quietly
     describe the wrong binary.
+
+    Held under an exclusive lock because every tool loads the same
+    firmware/build/rewind-m.elf by path. Without it, running the overflow test
+    while a campaign is in flight leaves the campaign measuring a 512-byte-buffer
+    binary and reporting numbers that look entirely plausible - the same shape as
+    the stale-peripheral incident in docs/MEASUREMENTS.md.
     """
+    BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        lock = os.open(BUILD_LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        raise SystemExit(
+            f"{BUILD_LOCK} exists: another tool is rebuilding the firmware, and "
+            "sharing one build directory would make both measure the wrong "
+            "binary. Wait for it, or delete the lock if nothing is running."
+        ) from None
+    try:
+        os.write(lock, (extra_cflags or "defaults").encode("ascii"))
+        os.close(lock)
+        _rebuild_locked(extra_cflags)
+    finally:
+        BUILD_LOCK.unlink(missing_ok=True)
+
+
+def _rebuild_locked(extra_cflags: str) -> None:
     subprocess.run(
         ["make", "-C", str(REPO / "firmware"), "clean"],
         check=True, capture_output=True, text=True,

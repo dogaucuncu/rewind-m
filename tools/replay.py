@@ -186,11 +186,22 @@ def main() -> int:
                             args.run_for)
         problems = compare(original, reproduced)
 
-        if args.require_torn and not original["result"]["torn"]:
-            problems.append(
-                "the recorded run did not hit the race, so reproducing it "
-                "demonstrates nothing about the fault"
-            )
+        if args.require_torn:
+            torn = original["result"]["torn"]
+            if torn is None:
+                # None means the verdict line did not parse. Reporting that as
+                # "did not hit the race" sends the reader to re-measure the
+                # failure rate when the real fault is a regex that no longer
+                # matches a line sitting in the log.
+                problems.append(
+                    "could not read the verdict line from the recorded run - "
+                    "the firmware output format and VERDICT_RE have diverged"
+                )
+            elif torn == 0:
+                problems.append(
+                    "the recorded run did not hit the race, so reproducing it "
+                    "demonstrates nothing about the fault"
+                )
 
         if problems:
             status = 1

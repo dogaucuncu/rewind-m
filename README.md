@@ -43,7 +43,7 @@ RECORD
    hooks inject ───►│    sensor read ──────────► recorder ──┐  │
    seeded           │    ISR entry ────────────► recorder ──┤  │
    non-determinism  │                                       ▼  │
-                    │                         ring buffer (RAM)│
+                    │                     bounded buffer (RAM) │
                     └───────────────────────────────────┬──────┘
                                                         │ UART flush
    ┌────────────────────────────────────────────┐       ▼
@@ -67,7 +67,10 @@ REPLAY — never sees the seed, reads only trace.bin
 Recording from emulator hooks would have been easier, but the result would be an *emulator
 tool* — it could never move to real silicon. The recorder is C code inside the firmware,
 subject to the same constraints as any other on-device instrumentation: a fixed cycle
-budget, a bounded ring buffer, a real bandwidth limit on getting the trace out.
+budget, a bounded buffer, a real bandwidth limit on getting the trace out.
+It is not a ring: on overflow it drops the *newest* events and records a gap, because
+overwriting the oldest would destroy the start of the run and make replay reproduce
+something that never happened.
 
 Renode's hooks are used for something else: recording the same events independently, as
 ground truth, so that CI can prove the in-firmware recorder did not miss anything. "What

@@ -11,6 +11,19 @@
 
 set -euo pipefail
 
+# python3 does not exist in Git Bash on Windows, which is the shell docs/SETUP.md
+# tells Windows readers to use. Pick whichever interpreter is actually here.
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON=python3
+elif command -v python >/dev/null 2>&1; then
+    PYTHON=python
+elif command -v py >/dev/null 2>&1; then
+    PYTHON=py
+else
+    echo "no python interpreter found (tried python3, python, py)" >&2
+    exit 1
+fi
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SEED="${1:-6}"
 
@@ -25,12 +38,12 @@ echo "The recording phase knows the seed. The replay phase is handed only the"
 echo "values in the trace - tools/gen_run.py refuses to build a replay"
 echo "peripheral that can reach a seed at all."
 echo
-python3 "${REPO}/tools/replay.py" --seeds "${SEED}" --require-torn
+"${PYTHON}" "${REPO}/tools/replay.py" --seeds "${SEED}" --require-torn
 
 TRACE="${REPO}/build/replay/${SEED}-record/trace.bin"
 if [[ -f "${TRACE}" ]]; then
     rule "What the trace actually contains"
-    python3 "${REPO}/tools/show_trace.py" "${TRACE}" --head 12
+    "${PYTHON}" "${REPO}/tools/show_trace.py" "${TRACE}" --head 12
 fi
 
 rule "What just happened"

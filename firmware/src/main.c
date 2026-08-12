@@ -38,7 +38,7 @@
  * of a real cost, not padding for its own sake.
  *
  * The default is not a guess: it comes from a sweep, and at 4096 the fault
- * appears in 7 of 400 runs. That is the regime this tool exists for - rare
+ * appears in 13 of 400 runs on the build that ships. That is the regime this tool exists for - rare
  * enough that you cannot catch it by running the thing again, common enough to
  * be real. Zero is a valid setting and means the baseline, nothing outside the
  * window.
@@ -140,7 +140,7 @@ static void selftest(void)
 {
     uint32_t before, after, i;
 
-    uart_puts("rewind-m M0 smoke test\r\n");
+    uart_puts("rewind-m self-test\r\n");
 
     before = dwt_cycles();
     for (i = 0u; i < SELFTEST_SAMPLES; i++) {
@@ -160,7 +160,7 @@ static void selftest(void)
     if (after == before) {
         uart_puts("FAIL dwt_stuck\r\n");
     } else {
-        uart_puts("M0 OK\r\n");
+        uart_puts("selftest OK\r\n");
     }
 }
 
@@ -244,6 +244,9 @@ int main(void)
         iters++;
         if (iters >= MAX_ITERS) {
             uart_puts("RUN FAIL no_ticks\r\n");
+            /* Flush before stopping: the run that never got a tick is
+             * exactly the one whose recorded inputs explain why. */
+            recorder_flush_hex();
             for (;;) {
             }
         }

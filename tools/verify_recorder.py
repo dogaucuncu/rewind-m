@@ -48,9 +48,15 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     resc = gen_run.generate_resc(
         seed, seed_dir, uart_out, run_for=run_for, oracle_out=oracle_out
     )
-    proc = renode_run.run_script(renode, resc)
-
     result: dict = {"seed": seed, "problems": []}
+    try:
+        proc = renode_run.run_script(renode, resc)
+    except renode_run.RenodeTimeout as exc:
+        # Reported for this seed and nothing else. Letting it escape would throw
+        # away every other comparison in the batch, which is what used to happen.
+        result["problems"].append(str(exc))
+        return result
+
     if not uart_out.exists() or not oracle_out.exists():
         result["problems"].append("run produced no UART output or no oracle trace")
         result["stderr_tail"] = (proc.stderr or proc.stdout)[-400:]

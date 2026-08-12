@@ -83,9 +83,11 @@ firmware reports for itself:
 |---|---|---|---|---|---|
 | 2026-08-12 | 5 | 209 = 209 | 200 = 200 | 200 = 200 | agree exactly |
 
-209 is 8 self-test samples, 1 priming read and one per tick. There is no recorder to diff
-against yet — this is the strongest check available until M3, and it is what caught the
-firmware reporting its counters while the timer was still running.
+209 is 8 self-test samples, 1 priming read and one per tick. This was the strongest check
+available before the recorder existed, and it is what caught the firmware reporting its
+counters while the timer was still running. It is kept alongside the recorder diff
+because it checks a different thing: the firmware's own accounting against the world,
+rather than one trace against another.
 
 ## Recorder against oracle (M3)
 

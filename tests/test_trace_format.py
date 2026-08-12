@@ -11,7 +11,9 @@ anything is not evidence.
 
 import pathlib
 import sys
+import tempfile
 import unittest
+import unittest.mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "tools"))
 
@@ -81,6 +83,26 @@ class DecoderTests(unittest.TestCase):
     def test_rejects_trace_shorter_than_its_header(self):
         with self.assertRaises(tf.TraceError):
             tf.parse_device_bytes(b"RWM")
+
+    def test_decodes_a_gap_record(self):
+        # The overflow path is otherwise only exercised through a full Renode
+        # run, which turns a pure-Python decoding bug into a Renode-level
+        # symptom several minutes later.
+        data = device_trace(
+            [("S", 10, 2043), ("G", 0, 529)], truncated=True
+        )
+        events, header = tf.parse_device_bytes(data)
+        self.assertTrue(header["truncated"])
+        self.assertEqual(events[-1].kind, tf.KIND_GAP)
+        self.assertEqual(events[-1].payload, 529)
+        self.assertEqual(tf.counts(events)["G"], 1)
+
+    def test_a_truncated_trace_does_not_compare_equal(self):
+        full, _ = tf.parse_device_bytes(device_trace(SAMPLE))
+        short, _ = tf.parse_device_bytes(
+            device_trace(SAMPLE[:2] + [("G", 0, 2)], truncated=True)
+        )
+        self.assertIsNotNone(tf.first_divergence(full, short))
 
 
 class HexExtractionTests(unittest.TestCase):
@@ -175,23 +197,33 @@ class ComparatorTests(unittest.TestCase):
 
 
 class OracleTextTests(unittest.TestCase):
+    """Writes into a temporary directory, never into the repository.
+
+    These used to drop _tmp_*.trace next to this file. Nothing ignored those
+    paths, and a test that raised before its cleanup left an untracked file
+    behind - which the CI step that checks the checkout was not modified would
+    then report as tooling corruption, pointing at the wrong thing entirely.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = pathlib.Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def write(self, name: str, text: str) -> pathlib.Path:
+        path = self.tmp / name
+        path.write_text(text, encoding="ascii")
+        return path
+
     def test_parses_and_counts(self):
-        path = pathlib.Path(__file__).with_name("_tmp_oracle.trace")
-        path.write_text("S 2043\nI 5\nJ 3735928559\n", encoding="ascii")
-        try:
-            events = tf.parse_oracle_text(path)
-            self.assertEqual(tf.counts(events), {"S": 1, "J": 1, "I": 1, "G": 0})
-        finally:
-            path.unlink()
+        path = self.write("oracle.trace", "S 2043\nI 5\nJ 3735928559\n")
+        events = tf.parse_oracle_text(path)
+        self.assertEqual(tf.counts(events), {"S": 1, "J": 1, "I": 1, "G": 0})
 
     def test_rejects_a_malformed_line(self):
-        path = pathlib.Path(__file__).with_name("_tmp_bad.trace")
-        path.write_text("S 2043\nnonsense\n", encoding="ascii")
-        try:
-            with self.assertRaises(ValueError):
-                tf.parse_oracle_text(path)
-        finally:
-            path.unlink()
+        path = self.write("bad.trace", "S 2043\nnonsense\n")
+        with self.assertRaises(ValueError):
+            tf.parse_oracle_text(path)
 
 
 class ReplayGeneratorTests(unittest.TestCase):
@@ -211,17 +243,30 @@ class ReplayGeneratorTests(unittest.TestCase):
         )
 
     def test_refuses_a_peripheral_carrying_a_seed(self):
-        source = gen_run.REPLAY_SRC
-        original = source.read_text(encoding="utf-8")
+        """Points the generator at a seeded COPY, never at the real source.
+
+        This test used to write a SEED line into the tracked renode/replay.py
+        and undo it in a finally. A kill between those two steps would have left
+        the repository holding a replay peripheral that can reach a seed - the
+        one thing the guard exists to prevent - with nothing to notice.
+        """
         # Built by concatenation rather than with an escape: a corrupted escape
         # is what broke this guard in the first place.
-        seeded = "SEED = 1234" + chr(10) + original
-        source.write_text(seeded, encoding="utf-8")
-        try:
-            with self.assertRaises(SystemExit):
-                gen_run.render_replay([1], pathlib.Path("overrun.log"))
-        finally:
-            source.write_text(original, encoding="utf-8")
+        seeded = "SEED = 1234" + chr(10) + gen_run.REPLAY_SRC.read_text(
+            encoding="utf-8"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = pathlib.Path(tmp) / "replay.py"
+            copy.write_text(seeded, encoding="utf-8")
+            with unittest.mock.patch.object(gen_run, "REPLAY_SRC", copy):
+                with self.assertRaises(SystemExit):
+                    gen_run.render_replay([1], pathlib.Path("overrun.log"))
+
+        # The real source is untouched, and still generates cleanly.
+        self.assertIn(
+            "VALUES = [1]",
+            gen_run.render_replay([1], pathlib.Path("overrun.log")),
+        )
 
 
 if __name__ == "__main__":

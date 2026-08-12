@@ -28,7 +28,6 @@ else:
 
 if is_init:
     index = 0
-    overruns = 0
 
 elif is_read:
     if index < len(VALUES):
@@ -38,7 +37,6 @@ elif is_read:
         # The firmware asked for more input than the trace holds. Under replay
         # that means the run has left the path the trace describes, so it is
         # recorded rather than papered over with a plausible-looking zero.
-        overruns += 1
         value = 0
         with open(EXHAUSTED_LOG, 'a') as f:
             f.write('overrun after %d values' % len(VALUES) + chr(10))
