@@ -10,13 +10,17 @@ workers, 0.2 emulated seconds per seed, `tools/campaign.py`.
 
 | Date | Build | Seeds | Torn | Rate | Torn seeds | Status |
 |---|---|---|---|---|---|---|
-| 2026-08-12 | with recorder | 400 | _re-measuring_ | | | in progress |
+| 2026-08-12 | with recorder | 400 | 13 | 3.25% | 6, 34, 70, 72, 144, 147, 177, 182, 187, 197, 239, 245, 285 | **current** |
 | 2026-08-12 | no recorder | 400 | 7 | 1.75% | 55, 130, 145, 322, 329, 374, 380 | **superseded** - see below |
 | 2026-08-12 | no recorder | 100 | 1 | 1.00% | 55 | superseded |
 | 2026-08-12 | no recorder, stale peripheral | 400 | 5 | 1.25% | 39, 127, 269, 308, 397 | **retracted** - see below |
 
 **The rate depends on whether the recorder is in the build, so the build is now part of the
-measurement.** Every one of the seven seeds above passes cleanly once the recorder is
+measurement** - and not only which runs fail, but how many: 1.75% without the recorder,
+3.25% with it. Adding instrumentation nearly doubled the failure rate rather than masking
+it, because the extra work shifts where the interrupt falls relative to the window.
+
+Every one of the seven seeds from the earlier row passes cleanly once the recorder is
 present: reproduced faithfully from its trace, but as a clean run. The instrumentation costs
 cycles, and a race that turns on where an interrupt lands relative to a few instructions is
 sensitive to exactly that. See [`LIMITS.md`](LIMITS.md#the-recorder-changes-the-timing-it-records).

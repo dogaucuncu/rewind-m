@@ -151,7 +151,7 @@ def compare(original: dict, reproduced: dict) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--seeds", default="55,130,145,322,329,374,380",
+        "--seeds", default="6,34,70,72,144,147,177,182,187,197,239,245,285",
         help="comma-separated seeds; the default is the set the campaign found "
              "the race in",
     )

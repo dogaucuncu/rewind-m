@@ -60,6 +60,9 @@ jobs:
       - name: Unit tests
         run: python tests/test_trace_format.py
 
+      - name: Check documentation links
+        run: python tools/check_links.py
+
       # Renode is installed OUTSIDE the workspace. It used to be unpacked into
       # ./renode, which is also where this project's own peripheral scripts
       # live, so the cache covered them: the archive saved on the first green
@@ -139,14 +142,13 @@ jobs:
       # a list of values and cannot reach the seed that produced them - the
       # generator refuses to build a replay peripheral containing one.
       #
-      # --require-torn is deliberately NOT set yet: the seed list below was
-      # measured before the recorder existed, and adding the recorder changed
-      # the timing, so those seeds may no longer hit the race. Asserting on a
-      # stale list would be asserting on a number nobody has re-measured.
-      - name: Replay recorded runs
+      # --require-torn makes this mean something: every seed here is one the
+      # campaign found the race in on the build that ships, so a change that
+      # quietly stopped reproducing failures cannot pass as a green tick.
+      - name: Replay failing runs from their traces
         env:
           RENODE_DIR: ${{ runner.temp }}/renode
-        run: python tools/replay.py --seeds 55,130,145,322,329,374,380
+        run: python tools/replay.py --require-torn
 
       # Every push runs a short campaign. It deliberately does NOT assert a
       # failure rate: at the measured 1.75%, a 100-seed run sees zero failures

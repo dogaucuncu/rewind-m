@@ -10,12 +10,11 @@ reproducible on demand.
 No hardware required. Everything runs on [Renode](https://renode.io/); `make` and one
 command gets you a running target.
 
-> **Status: M4 — recording is verified, and the verification is itself tested.** There is a
-> firmware with a real intermittent race, a recorder inside it, an emulator-side oracle that
-> proves the recorder misses nothing, and evidence that both of those checks can fail when
-> they should. Nothing is replayed yet; the replay engine is M5. Every number below was
-> measured by a tool in this repository, and the ones that turned out worse than the prior
-> art say so. See [Milestones](#milestones).
+> **Status: M5 — failing runs reproduce from their traces.** Thirteen runs out of four
+> hundred hit an intermittent race; CI reproduces every one of them from its trace alone,
+> with the fault intact and the replay side never given the seed. Every number below was
+> measured by a tool in this repository, and the ones that came out worse than the prior art
+> say so. See [Milestones](#milestones).
 
 ## Why this exists
 
@@ -105,6 +104,28 @@ python tools/verify_overflow.py              # make it overflow on purpose
 python tools/verify_oracle.py --count 5      # oracle against the firmware's own counts
 ```
 
+### Replay reads the trace and nothing else
+
+The recording phase uses a seed. The replay phase is handed a list of values taken from the
+trace and has no parameter that could carry one — `render_replay` refuses to build a replay
+peripheral from a source containing a `SEED` line, so the rule is enforced rather than
+promised.
+
+Reproduction has to satisfy three things at once: the replay run's own trace must match the
+original event for event with payloads included, the firmware must reach the same verdict
+with the same torn count and control checksum, and no peripheral may run out of recorded
+values. Running out means the run left the path the trace describes, which is reported
+rather than filled in with a plausible zero.
+
+Interrupts are verified, not forced. Under Renode a run follows from the image and its
+inputs, so feeding the values back puts the interrupts where they were; forcing them would
+have hidden the one thing worth checking. On real silicon that would not hold, which is why
+the trace records their positions in the first place.
+
+```bash
+python tools/replay.py --require-torn   # every failing run, reproduced from its trace
+```
+
 ### Non-determinism is injected on purpose
 
 Renode is deterministic by design. Recording inside a deterministic simulator and replaying
@@ -139,11 +160,19 @@ tick N+1.
 `tools/campaign.py` runs the firmware under many seeds as independent headless Renode
 processes and counts how many runs the fault appears in:
 
-> **Being re-measured.** That rate was taken on a build without the recorder in it. Adding
-> the recorder changed the timing enough that those seeds no longer hit the race — which is
-> a real property of on-device recording, not an accident, and is written up in
-> [`docs/LIMITS.md`](docs/LIMITS.md#the-recorder-changes-the-timing-it-records). The number
-> returns once it has been measured on the build that ships.
+```
+400 seeds, 387 clean, 13 torn  (3.25%)
+torn seeds: 6, 34, 70, 72, 144, 147, 177, 182, 187, 197, 239, 245, 285
+```
+
+Measured on the build that ships, recorder included. An earlier run without the recorder put
+the rate at 1.75%: adding instrumentation nearly doubled it rather than hiding it, because
+the extra cycles move where the interrupt falls relative to the window. That is a real
+property of on-device recording and is written up in
+[`docs/LIMITS.md`](docs/LIMITS.md#the-recorder-changes-the-timing-it-records).
+
+Every one of those thirteen runs is reproduced from its trace alone in CI, with the tear
+intact.
 
 How rare the fault is depends on how much work the controller does outside the window,
 which is the `CONTROL_WORK` constant. The default is 4096, chosen from a sweep — see
@@ -179,11 +208,11 @@ translation libraries).
 | | | Status |
 |---|---|---|
 | M0 | Toolchain, bare-metal target, DWT, seeded sensor peripheral, CI | done |
-| M1 | Deliberate race + seeded injection + N-seed campaign | done — 7/400 |
+| M1 | Deliberate race + seeded injection + N-seed campaign | done — 13/400 |
 | M2 | Oracle ground-truth recording + trace format | done |
 | M3 | In-firmware recorder + overhead measurement | done |
 | M4 | Differential validation as a CI gate | done |
-| M5 | Replay engine + divergence detector | |
+| M5 | Replay engine + divergence detector | done — 13/13 |
 | M6 | Documentation, related work, demo | |
 
 Scope for v1 is deliberately narrow: one board (STM32F4 Discovery), bare metal, sensor
