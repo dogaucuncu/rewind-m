@@ -193,10 +193,18 @@ campaign run so far, all of them produced one.
 Requirements: `arm-none-eabi-gcc`, `make`, Python 3.11+, and Renode 1.16+.
 
 ```bash
+scripts/demo.sh                        # record a failing run, replay it from the trace
+```
+
+That is the whole project in about a minute: it builds the firmware, records a run that
+fails, reproduces it from the trace alone, and prints the trace so you can see what a trace
+actually is. The rest:
+
+```bash
 make -C firmware                       # build the firmware
-python tools/gen_run.py --seed 1234    # generate the Renode platform for a seed
 scripts/test.sh                        # run the test suites under Renode
 python tools/campaign.py --count 100   # measure the failure rate
+python tools/show_trace.py <trace.bin> # read a trace
 ```
 
 On Windows use Git Bash for `make`; see [`docs/SETUP.md`](docs/SETUP.md) for the toolchain
@@ -213,7 +221,7 @@ translation libraries).
 | M3 | In-firmware recorder + overhead measurement | done |
 | M4 | Differential validation as a CI gate | done |
 | M5 | Replay engine + divergence detector | done — 13/13 |
-| M6 | Documentation, related work, demo | |
+| M6 | Documentation, related work, demo | done |
 
 Scope for v1 is deliberately narrow: one board (STM32F4 Discovery), bare metal, sensor
 reads and interrupt delivery. DMA, multi-core, RTOS scheduling and real-hardware validation

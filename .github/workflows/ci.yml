@@ -150,6 +150,13 @@ jobs:
           RENODE_DIR: ${{ runner.temp }}/renode
         run: python tools/replay.py --require-torn
 
+      # The demo is the path a reader will actually take, so CI takes it too.
+      # A documented command that nothing exercises stops working quietly.
+      - name: Run the demo
+        env:
+          RENODE_DIR: ${{ runner.temp }}/renode
+        run: scripts/demo.sh
+
       # Every push runs a short campaign. It deliberately does NOT assert a
       # failure rate: at the measured 1.75%, a 100-seed run sees zero failures
       # about 17% of the time, and a gate that flakes teaches people to ignore

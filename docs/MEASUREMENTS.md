@@ -123,6 +123,23 @@ now have been:
 The overflow path had been written in M3 and had never once executed. It works, but that
 was not knowable until it was made to run.
 
+## Reproduction from traces (M5)
+
+Per push, every seed the campaign found the race in. Each is recorded with its seed, then
+run again against peripherals that serve only the values in the trace:
+
+| Date | Seeds | Result | Events | Verdict reproduced |
+|---|---|---|---|---|
+| 2026-08-12 | 13 | all reproduced | 609 each | `torn=1`, `RUN FAIL torn=1`, matching checksum |
+
+The comparison here is stricter than the recorder-versus-oracle one: both traces come from
+the same recorder, so interrupt payloads are compared too. Alongside that, the firmware must
+reach the same verdict with the same torn count and control checksum, and no peripheral may
+run out of recorded values.
+
+CI runs this with `--require-torn`, so a seed that stopped hitting the race fails the build
+rather than passing quietly as a reproduction of nothing.
+
 ## How many seeds a claim needs
 
 A rate around 2% needs a few hundred seeds before it means anything. Rough guide, for

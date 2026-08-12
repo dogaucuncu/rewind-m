@@ -80,7 +80,18 @@ def record(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     events, header = trace_format.parse_device_bytes(data)
     if header["truncated"]:
         raise SystemExit(f"seed {seed}: recording is truncated, nothing to replay")
-    return {"events": events, "bytes": len(data), "result": outcome_of(uart)}
+
+    # Kept on disk as well as in memory: the trace is the artefact the whole
+    # project is about, and it should be possible to look at one.
+    trace_path = seed_dir / "trace.bin"
+    trace_path.write_bytes(data)
+
+    return {
+        "events": events,
+        "bytes": len(data),
+        "result": outcome_of(uart),
+        "trace_path": trace_path,
+    }
 
 
 def replay(renode: str, tag: str, work: pathlib.Path, events: list,
