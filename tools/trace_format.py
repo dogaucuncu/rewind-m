@@ -60,11 +60,94 @@ def parse_oracle_text(path: pathlib.Path) -> list[Event]:
     return events
 
 
-def parse_device_binary(path: pathlib.Path) -> list[Event]:
-    """Decode the on-device encoding. Implemented in M3, specified now."""
-    raise NotImplementedError(
-        "the device recorder lands in M3; docs/TRACE-FORMAT.md has the encoding"
-    )
+class TraceError(ValueError):
+    pass
+
+
+def _read_varint(data: bytes, pos: int) -> tuple[int, int]:
+    value = 0
+    shift = 0
+    while True:
+        if pos >= len(data):
+            raise TraceError("varint runs past the end of the trace")
+        byte = data[pos]
+        pos += 1
+        value |= (byte & 0x7F) << shift
+        if not (byte & 0x80):
+            return value, pos
+        shift += 7
+        if shift > 35:
+            raise TraceError("varint longer than a 32-bit value can need")
+
+
+def parse_device_bytes(data: bytes) -> tuple[list[Event], dict]:
+    """Decode the on-device encoding. See docs/TRACE-FORMAT.md.
+
+    Returns the events and the header fields, because a truncated trace is a
+    fact about the run that the caller has to be able to act on rather than a
+    detail to be smoothed over.
+    """
+    if len(data) < 8:
+        raise TraceError(f"trace is {len(data)} bytes, shorter than its header")
+    if data[:4] != MAGIC:
+        raise TraceError(f"bad magic {data[:4]!r}, expected {MAGIC!r}")
+
+    header = {
+        "version": data[4],
+        "truncated": bool(data[5] & 0x01),
+    }
+    if header["version"] != 1:
+        raise TraceError(f"unsupported trace version {header['version']}")
+
+    events: list[Event] = []
+    pos = 8
+    cycles = 0
+    while pos < len(data):
+        kind = chr(data[pos])
+        pos += 1
+        if kind not in KINDS:
+            raise TraceError(f"unknown record kind {kind!r} at byte {pos - 1}")
+        delta, pos = _read_varint(data, pos)
+        payload, pos = _read_varint(data, pos)
+        cycles += delta
+        events.append(Event(kind=kind, payload=payload, cycles=cycles))
+    return events, header
+
+
+def parse_device_binary(path: pathlib.Path) -> tuple[list[Event], dict]:
+    return parse_device_bytes(path.read_bytes())
+
+
+TRACE_BEGIN = "TRACE BEGIN"
+TRACE_END = "TRACE END"
+
+
+def extract_hex_trace(uart_text: str) -> bytes:
+    """Pull the trace out of the UART stream.
+
+    The firmware hex-encodes it between markers because the transport is shared
+    with human-readable output. The declared length is checked against what was
+    actually received: a run cut short mid-dump would otherwise decode into a
+    plausible-looking short trace.
+    """
+    begin = uart_text.find(TRACE_BEGIN)
+    if begin < 0:
+        raise TraceError("no trace in the UART output")
+    end = uart_text.find(TRACE_END, begin)
+    if end < 0:
+        raise TraceError("trace was not terminated - the run was cut short")
+
+    header_line, _, body = uart_text[begin:end].partition("\n")
+    declared = int(header_line.split()[-1])
+    digits = "".join(body.split())
+    if len(digits) % 2:
+        raise TraceError("odd number of hex digits in the trace")
+    data = bytes.fromhex(digits)
+    if len(data) != declared:
+        raise TraceError(
+            f"trace declared {declared} bytes but {len(data)} arrived"
+        )
+    return data
 
 
 def counts(events: list[Event]) -> dict[str, int]:

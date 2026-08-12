@@ -90,6 +90,10 @@ machine LoadPlatformDescription @{platform}
 sysbus LoadELF @{elf}
 sysbus.usart2 CreateFileBackend @{uart_out}
 {oracle}emulation RunFor "{run_for}"
+# Instruction count for the size figure. Reported in bytes per thousand
+# instructions, the unit TARDIS uses, so the two can be compared directly.
+echo INSTRUCTIONS_BEGIN
+sysbus.cpu ExecutedInstructions
 quit
 """
 

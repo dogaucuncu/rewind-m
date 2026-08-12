@@ -11,7 +11,7 @@ SIZE    := $(CROSS)size
 BUILD   := build
 TARGET  := $(BUILD)/rewind-m
 
-SRCS    := src/startup.c src/hal.c src/main.c
+SRCS    := src/startup.c src/hal.c src/recorder.c src/main.c
 OBJS    := $(patsubst src/%.c,$(BUILD)/%.o,$(SRCS))
 
 CPUFLAGS := -mcpu=cortex-m4 -mthumb -mfloat-abi=soft

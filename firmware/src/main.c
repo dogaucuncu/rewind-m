@@ -17,6 +17,7 @@
 
 #include <stdint.h>
 #include "hal.h"
+#include "recorder.h"
 
 /* ---- self-test ---------------------------------------------------------- */
 #define SELFTEST_SAMPLES 8u
@@ -68,16 +69,31 @@ static volatile uint32_t g_ticks;
 static volatile uint32_t g_sensor_reads;
 static volatile uint32_t g_jitter_reads;
 
+/* Cortex-M exception number of the handler currently running. Cheap - one
+ * instruction - which matters because it is read inside the ISR. */
+static inline uint32_t ipsr(void)
+{
+    uint32_t value;
+    __asm__ volatile ("mrs %0, ipsr" : "=r" (value));
+    return value & 0x1FFu;
+}
+
 static uint32_t read_sensor(void)
 {
+    uint32_t value = SENSOR_DR;
     g_sensor_reads++;
-    return SENSOR_DR;
+    /* Recorded after the read, so the trace carries the value the firmware
+     * actually saw. The oracle hooks the same access on its way out. */
+    recorder_event((uint8_t)TRACE_KIND_SENSOR, value);
+    return value;
 }
 
 static uint32_t read_jitter(void)
 {
+    uint32_t value = JITTER_DR;
     g_jitter_reads++;
-    return JITTER_DR;
+    recorder_event((uint8_t)TRACE_KIND_JITTER, value);
+    return value;
 }
 
 void TIM2_IRQHandler(void);
@@ -85,6 +101,10 @@ void TIM2_IRQHandler(void);
 void TIM2_IRQHandler(void)
 {
     uint32_t d;
+
+    /* First thing in the handler, so it lands in the same place in the sequence
+     * as the oracle's interrupt-begin hook. */
+    recorder_event((uint8_t)TRACE_KIND_IRQ, ipsr());
 
     TIM2_SR = ~TIM_SR_UIF;
 
@@ -155,6 +175,16 @@ int main(void)
     dwt_init();
 
     selftest();
+
+    /* Measured before anything is recorded for real, so the number is the cost
+     * of the recorder rather than the cost of the run. */
+    uart_puts("recorder cycles_per_event=");
+    uart_put_u32(recorder_measure_cost(256u));
+    uart_puts(" capacity=");
+    uart_put_u32((uint32_t)TRACE_CAPACITY);
+    uart_puts("\r\n");
+
+    recorder_init();
 
     /* Publish a consistent pair before the first tick. Without this the loop
      * sees g_depth == 0 against g_depth_inv == 0 - which fails the check - and
@@ -240,6 +270,13 @@ int main(void)
     uart_puts(" jitter=");
     uart_put_u32(g_jitter_reads);
     uart_puts("\r\n");
+
+    uart_puts("trace bytes=");
+    uart_put_u32(recorder_length());
+    uart_puts(" dropped=");
+    uart_put_u32(recorder_dropped());
+    uart_puts("\r\n");
+    recorder_flush_hex();
 
     if (torn == 0u) {
         uart_puts("RUN OK\r\n");

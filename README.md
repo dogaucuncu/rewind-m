@@ -160,7 +160,7 @@ translation libraries).
 | M0 | Toolchain, bare-metal target, DWT, seeded sensor peripheral, CI | done |
 | M1 | Deliberate race + seeded injection + N-seed campaign | done — 7/400 |
 | M2 | Oracle ground-truth recording + trace format | done |
-| M3 | In-firmware recorder + overhead measurement | |
+| M3 | In-firmware recorder + overhead measurement | done |
 | M4 | Differential validation as a CI gate | |
 | M5 | Replay engine + divergence detector | |
 | M6 | Documentation, related work, demo | |

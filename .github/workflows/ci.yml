@@ -109,6 +109,15 @@ jobs:
           RENODE_DIR: ${{ runner.temp }}/renode
         run: python tools/verify_oracle.py --count 5
 
+      # M3/M4: the check the project is built around. The recorder runs inside
+      # the firmware under a cycle budget and a bounded buffer; the oracle
+      # watches the same run from outside with neither constraint. One dropped
+      # or reordered event and the sequences stop matching.
+      - name: Verify recorder against oracle
+        env:
+          RENODE_DIR: ${{ runner.temp }}/renode
+        run: python tools/verify_recorder.py --count 5
+
       # Every push runs a short campaign. It deliberately does NOT assert a
       # failure rate: at the measured 1.75%, a 100-seed run sees zero failures
       # about 17% of the time, and a gate that flakes teaches people to ignore
