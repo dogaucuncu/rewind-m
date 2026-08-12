@@ -37,9 +37,10 @@
  * of a real cost, not padding for its own sake.
  *
  * tools/campaign.py --sweep measures the rate for a range of values; the
- * default below is whatever that measurement selected. */
+ * default below is whatever that measurement selected. Zero is a valid setting
+ * and means the baseline: nothing outside the window. */
 #ifndef CONTROL_WORK
-#define CONTROL_WORK  64u
+#define CONTROL_WORK  64
 #endif
 
 /* Bounds the run even if TIM2 never fires, so a broken timer model shows up as
@@ -146,8 +147,6 @@ int main(void)
         int32_t error;
         int32_t control;
 
-        uint32_t work;
-
         depth = g_depth;
 
         /* The window: the few instructions between the two reads of the shared
@@ -171,9 +170,14 @@ int main(void)
         control = (KP * error) + ((KI * integral) >> 4);
         control_sum += control >> 8;
 
-        for (work = 0u; work < CONTROL_WORK; work++) {
-            control_sum += (int32_t)(work ^ (uint32_t)control);
+#if CONTROL_WORK > 0
+        {
+            uint32_t work;
+            for (work = 0u; work < (uint32_t)CONTROL_WORK; work++) {
+                control_sum += (int32_t)(work ^ (uint32_t)control);
+            }
         }
+#endif
 
         iters++;
         if (iters >= MAX_ITERS) {

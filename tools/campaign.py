@@ -129,7 +129,7 @@ def rebuild(control_work: int) -> None:
     )
     proc = subprocess.run(
         ["make", "-C", str(REPO / "firmware"),
-         f"EXTRA_CFLAGS=-DCONTROL_WORK={control_work}u"],
+         f"EXTRA_CFLAGS=-DCONTROL_WORK={control_work}"],
         capture_output=True, text=True,
     )
     if proc.returncode != 0:
