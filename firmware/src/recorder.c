@@ -8,6 +8,12 @@
 #define TRACE_VERSION 1u
 #define TRACE_FLAG_TRUNCATED 0x01u
 
+/* A buffer too small to hold one record drops every event and still produces a
+ * well-formed trace - header, gap marker, nothing else. Caught at compile time
+ * rather than left to be discovered from an empty trace. */
+_Static_assert(TRACE_CAPACITY >= TRACE_MAX_RECORD * 2u,
+               "TRACE_CAPACITY must hold at least two records");
+
 static uint8_t  g_buf[TRACE_CAPACITY];
 static uint32_t g_len;
 static uint32_t g_dropped;
@@ -120,6 +126,13 @@ uint32_t recorder_measure_cost(uint32_t iterations)
     uint32_t i;
     uint32_t before;
     uint32_t after;
+
+    if (iterations == 0u) {
+        /* Dividing by the caller's zero would be undefined behaviour on the
+         * target. Reporting no measurement is the honest answer to "what does
+         * one event cost, averaged over none of them". */
+        return 0u;
+    }
 
     recorder_init();
     before = dwt_cycles();

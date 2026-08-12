@@ -49,6 +49,26 @@ jitter: Python.PythonPeripheral @ sysbus 0x50000004
 """
 
 
+def _safe_run_for(run_for: str) -> str:
+    """Validate the emulated duration before it goes into a monitor string.
+
+    It lands inside `emulation RunFor "..."`. A value carrying a quote closes
+    that string early and whatever follows becomes monitor commands - the same
+    shape of hole as an unquoted path, on an argument that looks too boring to
+    check.
+    """
+    text = str(run_for).strip()
+    try:
+        seconds = float(text)
+    except ValueError:
+        raise SystemExit(
+            f"--run-for must be a number of emulated seconds, got {run_for!r}"
+        ) from None
+    if seconds <= 0.0:
+        raise SystemExit(f"--run-for must be positive, got {run_for!r}")
+    return text
+
+
 def _safe_path(path: pathlib.Path, what: str) -> str:
     """Return a path fit for embedding in generated Renode code.
 
@@ -209,10 +229,10 @@ def generate_resc(
     resc_path.write_text(
         RESC_TEMPLATE.format(
             seed=seed,
+            run_for=_safe_run_for(run_for),
             platform=platform_path.as_posix(),
             elf=elf_path.as_posix(),
             uart_out=uart_out.resolve().as_posix(),
-            run_for=run_for,
             oracle=oracle_block,
         ),
         encoding="utf-8",
@@ -310,7 +330,7 @@ def generate_replay_resc(
             platform=platform_path.as_posix(),
             elf=elf_path.as_posix(),
             uart_out=uart_out.resolve().as_posix(),
-            run_for=run_for,
+            run_for=_safe_run_for(run_for),
             oracle="",
         ),
         encoding="utf-8",

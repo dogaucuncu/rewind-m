@@ -1,0 +1,16 @@
+# Constraints applied on top of Renode's own tests/requirements.txt.
+#
+# That file pins five packages exactly and two by range:
+#
+#     pyyaml==6.0.*
+#     telnetlib3==2.0.*
+#
+# A range means CI installs whatever patch release exists on the day it runs,
+# including one published after a maintainer account is compromised. These
+# constraints close the range without forking Renode's file, so the pins Renode
+# does make still apply and only the loose ones are tightened.
+#
+# Revisit when RENODE_VERSION changes: a newer Renode may need a newer minor,
+# and this file will make that a loud failure rather than a silent upgrade.
+pyyaml==6.0.3
+telnetlib3==2.0.8

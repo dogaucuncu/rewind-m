@@ -210,6 +210,8 @@ python tools/campaign.py --count 100   # measure the failure rate
 python tools/show_trace.py <trace.bin> # read a trace
 ```
 
+Dependencies and what they are worth worrying about: [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md).
+
 On Windows use Git Bash for `make`; see [`docs/SETUP.md`](docs/SETUP.md) for the toolchain
 notes, including which Renode package to install (the winget one is missing the CPU
 translation libraries).
