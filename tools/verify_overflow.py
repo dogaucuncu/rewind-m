@@ -51,7 +51,13 @@ def probe(renode: str, seed: int, work: pathlib.Path, run_for: str) -> list[str]
     resc = gen_run.generate_resc(
         seed, seed_dir, uart_out, run_for=run_for, oracle_out=oracle_out
     )
-    proc = renode_run.run_script(renode, resc)
+    try:
+        proc = renode_run.run_script(renode, resc)
+    except renode_run.RenodeTimeout as exc:
+        # Reported as a problem rather than a traceback, so main()'s finally
+        # still restores the default build before this returns.
+        return [str(exc)]
+
     if not uart_out.exists():
         return [f"no UART output: {(proc.stderr or proc.stdout)[-300:]}"]
 

@@ -181,9 +181,18 @@ def main() -> int:
     status = 0
 
     for seed in seeds:
-        original = record(renode, seed, args.work, args.run_for)
-        reproduced = replay(renode, str(seed), args.work, original["events"],
-                            args.run_for)
+        try:
+            original = record(renode, seed, args.work, args.run_for)
+            reproduced = replay(renode, str(seed), args.work,
+                                original["events"], args.run_for)
+        except renode_run.RenodeTimeout as exc:
+            # One hung process is one failed seed. Letting it escape would
+            # abandon every seed after it with no record of which one hung.
+            status = 1
+            print(f"seed {seed}: FAIL")
+            print(f"    {exc}")
+            continue
+
         problems = compare(original, reproduced)
 
         if args.require_torn:
