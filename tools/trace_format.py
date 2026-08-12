@@ -175,16 +175,24 @@ def counts(events: list[Event]) -> dict[str, int]:
     return tally
 
 
-def first_divergence(a: list[Event], b: list[Event]) -> tuple[int, Event | None, Event | None] | None:
+def first_divergence(
+    a: list[Event], b: list[Event], strict: bool = False
+) -> tuple[int, Event | None, Event | None] | None:
     """Index of the first differing event, or None if the sequences match.
 
     Returns the index and both events so a failure can say what it expected and
     what it got, rather than only that something was wrong.
+
+    `strict` includes interrupt payloads. Use it when both sequences come from
+    the same producer - comparing a recording against its replay, where the two
+    traces really should agree on every field. The default excludes them,
+    because the oracle cannot express the recorder's interrupt numbering; see
+    Event.comparable_key.
     """
+    key = (lambda e: e.key) if strict else (lambda e: e.comparable_key)
     for index in range(max(len(a), len(b))):
         left = a[index] if index < len(a) else None
         right = b[index] if index < len(b) else None
-        if (left is None or right is None
-                or left.comparable_key != right.comparable_key):
+        if left is None or right is None or key(left) != key(right):
             return index, left, right
     return None

@@ -1,4 +1,4 @@
-"""Unit tests for the trace decoder and the comparator.
+"""Unit tests for the trace decoder, the comparator, and the replay generator.
 
 These exist because the comparator is the thing every other claim rests on. If
 `first_divergence` always returned None, CI would be green, the README would say
@@ -15,6 +15,7 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "tools"))
 
+import gen_run  # noqa: E402
 import trace_format as tf  # noqa: E402
 
 
@@ -191,6 +192,36 @@ class OracleTextTests(unittest.TestCase):
                 tf.parse_oracle_text(path)
         finally:
             path.unlink()
+
+
+class ReplayGeneratorTests(unittest.TestCase):
+    """The replay peripheral must not be able to reach a seed.
+
+    This guard was written once with a corrupted regex - a stray escape made it
+    match "SEED" followed by a backspace character, so it could never fire. It
+    looked correct in review. It is tested here because a guard nobody has seen
+    reject anything is not a guard.
+    """
+
+    def test_bakes_values_without_a_seed(self):
+        src = gen_run.render_replay([7, 8, 9], pathlib.Path("overrun.log"))
+        self.assertIn("VALUES = [7,8,9]", src)
+        self.assertFalse(
+            any(line.startswith("SEED") for line in src.splitlines())
+        )
+
+    def test_refuses_a_peripheral_carrying_a_seed(self):
+        source = gen_run.REPLAY_SRC
+        original = source.read_text(encoding="utf-8")
+        # Built by concatenation rather than with an escape: a corrupted escape
+        # is what broke this guard in the first place.
+        seeded = "SEED = 1234" + chr(10) + original
+        source.write_text(seeded, encoding="utf-8")
+        try:
+            with self.assertRaises(SystemExit):
+                gen_run.render_replay([1], pathlib.Path("overrun.log"))
+        finally:
+            source.write_text(original, encoding="utf-8")
 
 
 if __name__ == "__main__":

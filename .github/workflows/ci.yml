@@ -135,6 +135,19 @@ jobs:
           RENODE_DIR: ${{ runner.temp }}/renode
         run: python tools/verify_overflow.py
 
+      # M5: reproduce recorded runs from their traces. The replay side is handed
+      # a list of values and cannot reach the seed that produced them - the
+      # generator refuses to build a replay peripheral containing one.
+      #
+      # --require-torn is deliberately NOT set yet: the seed list below was
+      # measured before the recorder existed, and adding the recorder changed
+      # the timing, so those seeds may no longer hit the race. Asserting on a
+      # stale list would be asserting on a number nobody has re-measured.
+      - name: Replay recorded runs
+        env:
+          RENODE_DIR: ${{ runner.temp }}/renode
+        run: python tools/replay.py --seeds 55,130,145,322,329,374,380
+
       # Every push runs a short campaign. It deliberately does NOT assert a
       # failure rate: at the measured 1.75%, a 100-seed run sees zero failures
       # about 17% of the time, and a gate that flakes teaches people to ignore
