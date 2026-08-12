@@ -103,6 +103,21 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
             f"traces diverge at event {index}: device={dev.key if dev else None} "
             f"oracle={orc.key if orc else None}"
         )
+        # A divergence is usually one of two things: a genuinely missing event,
+        # or the two sides encoding the same event differently. Printing the
+        # shape of both traces distinguishes them without another round trip.
+        result["shape"] = {
+            "device_counts": trace_format.counts(device),
+            "oracle_counts": trace_format.counts(oracle),
+            "device_irq_payloads": sorted(
+                {e.payload for e in device if e.kind == trace_format.KIND_IRQ}
+            )[:5],
+            "oracle_irq_payloads": sorted(
+                {e.payload for e in oracle if e.kind == trace_format.KIND_IRQ}
+            )[:5],
+            "device_head": [e.key for e in device[:4]],
+            "oracle_head": [e.key for e in oracle[:4]],
+        }
     return result
 
 
@@ -125,6 +140,9 @@ def main() -> int:
             print(f"seed {seed}: FAIL")
             for problem in result["problems"]:
                 print(f"    {problem}")
+            if "shape" in result:
+                for key, value in result["shape"].items():
+                    print(f"    {key}: {value}")
             if "stderr_tail" in result:
                 print(f"    renode: {result['stderr_tail'].strip()[-300:]}")
         else:

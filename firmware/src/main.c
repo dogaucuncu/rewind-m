@@ -174,10 +174,13 @@ int main(void)
     uart_init();
     dwt_init();
 
-    selftest();
-
-    /* Measured before anything is recorded for real, so the number is the cost
-     * of the recorder rather than the cost of the run. */
+    /* Cost of the recorder, measured in isolation before anything real is
+     * recorded.
+     *
+     * This must run BEFORE the self-test. The measurement resets the recorder
+     * when it finishes, so measuring afterwards silently discards the
+     * self-test's reads: the device trace then starts eight events later than
+     * the oracle's, and every subsequent comparison is off by that much. */
     uart_puts("recorder cycles_per_event=");
     uart_put_u32(recorder_measure_cost(256u));
     uart_puts(" capacity=");
@@ -185,6 +188,8 @@ int main(void)
     uart_puts("\r\n");
 
     recorder_init();
+    selftest();
+
 
     /* Publish a consistent pair before the first tick. Without this the loop
      * sees g_depth == 0 against g_depth_inv == 0 - which fails the check - and
