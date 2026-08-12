@@ -94,17 +94,26 @@ quit
 """
 
 # Ground-truth recording, from outside the CPU. Renode hooks take a single line
-# of Python, so these are written to need nothing else: no shared state, no
-# helper functions, and no backslashes (the monitor tokenises the line before
-# Python ever sees it, and an escape would not survive).
+# of Python, and three separate constraints shape what that line may contain:
+#
+#   - No backslashes. The monitor tokenises the line before Python sees it, and
+#     an escape would not survive; chr(10) instead of a newline escape.
+#   - No semicolons. The monitor splits commands on them even inside quotes, so
+#     the usual `f=open(...); f.write(...); f.close()` idiom would be chopped
+#     into three broken commands. Hence `with`.
+#   - The file must be closed explicitly. IronPython finalises through the .NET
+#     GC rather than by reference counting, so `open(...).write(...)` leaves the
+#     handle unreferenced but unflushed: the file gets created and stays empty.
+#     That failure is silent, parses cleanly as zero events, and cost two CI
+#     rounds to find.
 #
 # Opening the file per event is not fast. It does not need to be: a run produces
 # a few hundred events, and the oracle is not the thing whose cost is measured.
 ORACLE_TEMPLATE = """# Ground truth for the differential check - see docs/TRACE-FORMAT.md
-sysbus SetHookAfterPeripheralRead sysbus.sensor "open(r'{oracle_out}','a').write('S %d' % value + chr(10))"
-sysbus SetHookAfterPeripheralRead sysbus.jitter "open(r'{oracle_out}','a').write('J %d' % value + chr(10))"
-sysbus.cpu AddHookAtInterruptBegin "open(r'{oracle_out}','a').write('I 0' + chr(10))"
-sysbus.cpu AddHookAtInterruptBegin "open(r'{diag_out}','w').write(' '.join(sorted(dir())) + chr(10))"
+sysbus SetHookAfterPeripheralRead sysbus.sensor "with open(r'{oracle_out}','a') as f: f.write('S %d' % value + chr(10))"
+sysbus SetHookAfterPeripheralRead sysbus.jitter "with open(r'{oracle_out}','a') as f: f.write('J %d' % value + chr(10))"
+sysbus.cpu AddHookAtInterruptBegin "with open(r'{oracle_out}','a') as f: f.write('I 0' + chr(10))"
+sysbus.cpu AddHookAtInterruptBegin "with open(r'{diag_out}','w') as f: f.write(' '.join(sorted(dir())) + chr(10))"
 """
 
 DEFAULT_ELF = REPO / "firmware" / "build" / "rewind-m.elf"
