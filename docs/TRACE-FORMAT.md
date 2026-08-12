@@ -12,10 +12,23 @@ have predicted:
 |---|---|---|
 | `S` | read of the sensor data register (`0x50000000`) | 32-bit value returned |
 | `J` | read of the timer jitter register (`0x50000004`) | 32-bit value returned |
-| `I` | an interrupt was delivered | exception index — see note |
+| `I` | an interrupt was delivered | Cortex-M exception number (IPSR) — see note |
 
 Order is part of the trace. Two traces are equal when their `(kind, payload)` sequences are
-equal, element for element. Timestamps are *not* part of that comparison — see below.
+equal, element for element, with two exclusions: timestamps, and interrupt payloads.
+
+**Interrupt payloads are excluded from cross-checking, and that is a real limit rather than
+a convenience.** The recorder writes the Cortex-M exception number from IPSR, which says
+*which* interrupt fired. Renode's interrupt hook exposes the classic ARM exception class
+instead — 5, meaning "an IRQ", for every interrupt in the system — so the oracle cannot
+produce that number for any interrupt at all. Holding them equal would be comparing two
+different facts.
+
+What is still checked, and is what the oracle is for, is that interrupts appear the same
+number of times in the same positions. A dropped or reordered interrupt shifts the sequence
+and fails. What is *not* cross-validated is interrupt identity: with a single source enabled
+that costs nothing, but a multi-source firmware would need a second means of confirming the
+recorder attributed each interrupt correctly.
 
 ## Writing hooks that survive Renode
 

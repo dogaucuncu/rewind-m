@@ -49,6 +49,18 @@ The honest summary: replay never sees the seed, which is what makes the reproduc
 non-circular. But a reader should know that simulation makes the job easier than hardware
 would, and the design does not take the discount.
 
+## What the oracle cannot check
+
+The oracle confirms the recorder captured every event, in order, with the right values — for
+sensor and jitter reads. It cannot confirm interrupt *identity*: Renode's interrupt hook
+reports the ARM exception class (5 for any IRQ), not the Cortex-M exception number the
+recorder writes, so the two have no common ground on that field.
+
+With one interrupt source enabled this costs nothing, because there is only one thing an
+interrupt can be. A firmware with several sources would need a different way to confirm the
+recorder attributed each one correctly, and this document would be the wrong place to leave
+that unsaid.
+
 ## Divergence, overflow, and other honest failures
 
 - **Ring buffer overflow.** If the recorder cannot keep up, the overflow is written into the
