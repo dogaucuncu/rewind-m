@@ -54,6 +54,8 @@
 /* ---- NVIC --------------------------------------------------------------- */
 #define NVIC_ISER0      REG32(0xE000E100u)
 #define NVIC_ISER1      REG32(0xE000E104u)
+#define NVIC_ICER0      REG32(0xE000E180u)
+#define NVIC_ICER1      REG32(0xE000E184u)
 
 #define IRQ_TIM2        28u
 #define IRQ_USART2      38u
@@ -64,6 +66,15 @@ static inline void nvic_enable(uint32_t irq)
         NVIC_ISER0 = (1u << irq);
     } else {
         NVIC_ISER1 = (1u << (irq - 32u));
+    }
+}
+
+static inline void nvic_disable(uint32_t irq)
+{
+    if (irq < 32u) {
+        NVIC_ICER0 = (1u << irq);
+    } else {
+        NVIC_ICER1 = (1u << (irq - 32u));
     }
 }
 

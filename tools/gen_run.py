@@ -112,7 +112,7 @@ quit
 ORACLE_TEMPLATE = """# Ground truth for the differential check - see docs/TRACE-FORMAT.md
 sysbus SetHookAfterPeripheralRead sysbus.sensor "with open(r'{oracle_out}','a') as f: f.write('S %d' % value + chr(10))"
 sysbus SetHookAfterPeripheralRead sysbus.jitter "with open(r'{oracle_out}','a') as f: f.write('J %d' % value + chr(10))"
-sysbus.cpu AddHookAtInterruptBegin "with open(r'{oracle_out}','a') as f: f.write('I 0' + chr(10))"
+sysbus.cpu AddHookAtInterruptBegin "with open(r'{oracle_out}','a') as f: f.write('I %d' % exceptionIndex + chr(10))"
 sysbus.cpu AddHookAtInterruptBegin "with open(r'{diag_out}','w') as f: f.write(' '.join(sorted(dir())) + chr(10))"
 """
 

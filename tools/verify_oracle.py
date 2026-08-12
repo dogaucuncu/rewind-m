@@ -109,12 +109,13 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
             f"jitter reads: firmware {fw_jitter}, oracle "
             f"{tally[trace_format.KIND_JITTER]}"
         )
-    # The firmware's jitter reads happen one per tick, so the interrupt count
-    # cannot be lower than that without something having been missed.
-    if tally[trace_format.KIND_IRQ] < ticks:
+    # One interrupt source is enabled and the firmware disables it before
+    # reporting, so the counts should match exactly. If they do not, the
+    # histogram of exception indices says whether something else fired.
+    if tally[trace_format.KIND_IRQ] != ticks:
         result["problems"].append(
             f"interrupts: oracle saw {tally[trace_format.KIND_IRQ]}, "
-            f"firmware counted {ticks} ticks"
+            f"firmware counted {ticks} ticks; indices {dict(irq_indices)}"
         )
     return result
 

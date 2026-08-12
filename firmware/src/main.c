@@ -214,6 +214,16 @@ int main(void)
         }
     }
 
+    /* Stop the tick before reporting. The run continues to be emulated after
+     * main() finishes, so a timer left running keeps feeding the ISR and the
+     * oracle keeps recording reads the firmware never counted - the two totals
+     * then disagree by however long the emulation happened to run on. Disabling
+     * at the NVIC as well as the timer means a pending interrupt cannot slip
+     * through between the two writes. */
+    TIM2_CR1 = 0u;
+    TIM2_DIER = 0u;
+    nvic_disable(IRQ_TIM2);
+
     uart_puts("control ticks=");
     uart_put_u32(g_ticks);
     uart_puts(" iters=");
