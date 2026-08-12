@@ -1,11 +1,15 @@
-# Simulated depth sensor — the firmware's main source of non-determinism.
+# -*- coding: ascii -*-
+# Simulated depth sensor - the firmware's main source of non-determinism.
 #
-# Runs inside Renode as a Python peripheral (IronPython). State persists between
-# requests, so the PRNG stream is continuous across the whole run.
+# Runs inside Renode as a Python peripheral. That interpreter is IronPython with
+# Python 2 semantics, and it rejects non-ASCII source without a PEP 263 encoding
+# declaration, so this file stays strictly ASCII. Keep it that way.
+#
+# State persists between requests, so the PRNG stream is continuous across a run.
 #
 # The SEED line below is rewritten per run by tools/gen_run.py. It is the ONLY
-# thing that varies between runs, and the replay path never sees it — replay
-# reads recorded values from the trace, never from this peripheral.
+# thing that varies between runs, and the replay path never sees it: replay reads
+# recorded values from the trace, never from this peripheral.
 
 SEED = 20260812
 
@@ -17,8 +21,8 @@ if request.isInit:
     sample_count = 0
 
 elif request.isRead:
-    # xorshift32 — chosen over anything fancier because the replay side has to
-    # be able to state plainly that it does NOT reproduce this stream.
+    # xorshift32, chosen over anything fancier because the replay side has to be
+    # able to state plainly that it does NOT reproduce this stream.
     rng_state ^= (rng_state << 13) & 0xFFFFFFFF
     rng_state ^= (rng_state >> 17)
     rng_state ^= (rng_state << 5) & 0xFFFFFFFF
