@@ -12,10 +12,18 @@ have predicted:
 |---|---|---|
 | `S` | read of the sensor data register (`0x50000000`) | 32-bit value returned |
 | `J` | read of the timer jitter register (`0x50000004`) | 32-bit value returned |
-| `I` | an interrupt was delivered | exception index |
+| `I` | an interrupt was delivered | exception index — see note |
 
 Order is part of the trace. Two traces are equal when their `(kind, payload)` sequences are
 equal, element for element. Timestamps are *not* part of that comparison — see below.
+
+**The oracle currently writes `0` as the interrupt payload.** Renode's interrupt hook takes a
+line of Python, and none of the examples shipped with Renode reference a variable inside one,
+so which names are in scope there is not something to guess at: an earlier attempt at
+`exceptionIndex` raised after the hook had already created the output file, which produced an
+empty trace and a confusing failure. The run now writes the hook's visible names to a
+`.names` file alongside the trace, and the payload gets filled in once that has been read.
+Only one interrupt source is enabled, so the count is meaningful in the meantime.
 
 Everything else about a run — every branch, every store, the control output — follows from
 the firmware image plus this sequence. That is the claim the whole project rests on, and

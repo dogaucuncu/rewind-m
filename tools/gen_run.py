@@ -31,29 +31,37 @@ using "platforms/boards/stm32f4_discovery.repl"
 dwt: Miscellaneous.DWT @ sysbus 0xE0001000
     frequency: 168000000
 
-// The simulated world: two registers the firmware cannot predict.
-//   0x50000000  depth sample (an ADC data register on real hardware)
-//   0x50000004  control-timer jitter
-// Seeded, so runs differ from one another on purpose - recording inside a
+// The simulated world: two registers the firmware cannot predict. Two separate
+// peripherals rather than one with two offsets, so the oracle's read hooks bind
+// per register - Renode's peripheral-read hook exposes `value`, not `offset`.
+// Seeded, so runs differ from one another on purpose: recording inside a
 // deterministic simulator and replaying in the same one would prove nothing.
 sensor: Python.PythonPeripheral @ sysbus 0x50000000
-    size: 0x8
+    size: 0x4
     initable: true
     filename: "{sensor_path}"
+
+jitter: Python.PythonPeripheral @ sysbus 0x50000004
+    size: 0x4
+    initable: true
+    filename: "{jitter_path}"
 """
 
 
-def render_sensor(seed: int) -> str:
+def render_sensor(seed: int, role: str) -> str:
     src = SENSOR_SRC.read_text(encoding="utf-8")
-    patched, count = re.subn(
-        r"^SEED = .*$", f"SEED = {seed}", src, count=1, flags=re.MULTILINE
-    )
-    if count != 1:
-        raise SystemExit(
-            f"{SENSOR_SRC}: expected exactly one 'SEED = ...' line, found {count}"
-        )
-    _require_ascii(SENSOR_SRC, patched)
-    return patched
+    for pattern, replacement in (
+        (r"^SEED = .*$", f"SEED = {seed}"),
+        (r"^ROLE = .*$", f"ROLE = {role!r}"),
+    ):
+        src, count = re.subn(pattern, replacement, src, count=1, flags=re.MULTILINE)
+        if count != 1:
+            raise SystemExit(
+                f"{SENSOR_SRC}: expected exactly one line matching {pattern!r}, "
+                f"found {count}"
+            )
+    _require_ascii(SENSOR_SRC, src)
+    return src
 
 
 def _require_ascii(source: pathlib.Path, text: str) -> None:
@@ -93,8 +101,10 @@ quit
 # Opening the file per event is not fast. It does not need to be: a run produces
 # a few hundred events, and the oracle is not the thing whose cost is measured.
 ORACLE_TEMPLATE = """# Ground truth for the differential check - see docs/TRACE-FORMAT.md
-sysbus SetHookAfterPeripheralRead sysbus.sensor "open(r'{oracle_out}','a').write(('S %d' if offset == 0 else 'J %d') % value + chr(10))"
-sysbus.cpu AddHookAtInterruptBegin "open(r'{oracle_out}','a').write('I %d' % exceptionIndex + chr(10))"
+sysbus SetHookAfterPeripheralRead sysbus.sensor "open(r'{oracle_out}','a').write('S %d' % value + chr(10))"
+sysbus SetHookAfterPeripheralRead sysbus.jitter "open(r'{oracle_out}','a').write('J %d' % value + chr(10))"
+sysbus.cpu AddHookAtInterruptBegin "open(r'{oracle_out}','a').write('I 0' + chr(10))"
+sysbus.cpu AddHookAtInterruptBegin "open(r'{diag_out}','w').write(' '.join(sorted(dir())) + chr(10))"
 """
 
 DEFAULT_ELF = REPO / "firmware" / "build" / "rewind-m.elf"
@@ -104,7 +114,10 @@ def generate(seed: int, out_dir: pathlib.Path) -> pathlib.Path:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sensor_path = out_dir / f"sensor_{seed}.py"
-    sensor_path.write_text(render_sensor(seed), encoding="utf-8")
+    sensor_path.write_text(render_sensor(seed, "sensor"), encoding="utf-8")
+
+    jitter_path = out_dir / f"jitter_{seed}.py"
+    jitter_path.write_text(render_sensor(seed, "jitter"), encoding="utf-8")
 
     platform_path = out_dir / f"rewind_{seed}.repl"
     platform_path.write_text(
@@ -113,6 +126,7 @@ def generate(seed: int, out_dir: pathlib.Path) -> pathlib.Path:
             # Forward slashes work on both platforms; backslashes would need
             # escaping inside the .repl string literal.
             sensor_path=sensor_path.as_posix(),
+            jitter_path=jitter_path.as_posix(),
         ),
         encoding="utf-8",
     )
@@ -143,8 +157,14 @@ def generate_resc(
 
     oracle_block = ""
     if oracle_out is not None:
+        resolved = oracle_out.resolve()
         oracle_block = ORACLE_TEMPLATE.format(
-            oracle_out=oracle_out.resolve().as_posix()
+            oracle_out=resolved.as_posix(),
+            # Written with 'w' so it keeps only the last invocation: one line
+            # naming what is actually in scope inside an interrupt hook. Renode's
+            # own examples never use a variable there, so rather than guess at
+            # `exceptionIndex` and get an empty trace again, the run reports it.
+            diag_out=resolved.with_suffix(".names").as_posix(),
         )
 
     resc_path = out_dir / f"run_{seed}.resc"

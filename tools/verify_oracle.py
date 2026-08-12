@@ -77,6 +77,15 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     fw_sensor, fw_jitter = int(reads.group(1)), int(reads.group(2))
     ticks = int(control.group(1))
 
+    # Informational only: what the interrupt hook can actually see. Never fails
+    # the run - it exists so the next enrichment of the trace does not have to
+    # be guessed at across a CI round trip.
+    names_file = oracle_out.with_suffix(".names")
+    if names_file.exists():
+        result["hook_names"] = names_file.read_text(
+            encoding="ascii", errors="replace"
+        ).strip()
+
     events = trace_format.parse_oracle_text(oracle_out)
     tally = trace_format.counts(events)
     irq_indices = collections.Counter(
@@ -135,9 +144,10 @@ def main() -> int:
             fw = result["firmware"]
             print(
                 f"seed {seed}: ok  sensor={fw['sensor']} jitter={fw['jitter']} "
-                f"ticks={fw['ticks']} irq={result['oracle']['I']} "
-                f"irq_indices={result['irq_indices']}"
+                f"ticks={fw['ticks']} irq={result['oracle']['I']}"
             )
+        if "hook_names" in result:
+            print(f"    interrupt hook scope: {result['hook_names']}")
 
     if status:
         print(
