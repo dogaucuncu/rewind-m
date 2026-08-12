@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      sweep:
+        description: 'Sweep CONTROL_WORK instead of running a single campaign'
+        type: boolean
+        default: false
+      count:
+        description: 'Seeds per measurement point'
+        default: '400'
 
 env:
   RENODE_VERSION: 1.16.1
@@ -86,13 +94,23 @@ jobs:
       - name: Measure race failure rate
         env:
           RENODE_DIR: ${{ runner.temp }}/renode
-          CAMPAIGN_COUNT: ${{ github.event_name == 'workflow_dispatch' && '400' || '100' }}
+          CAMPAIGN_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.count || '100' }}
+          CAMPAIGN_SWEEP: ${{ github.event_name == 'workflow_dispatch' && inputs.sweep || false }}
         run: |
-          python tools/campaign.py \
-            --count "${CAMPAIGN_COUNT}" \
-            --jobs 4 \
-            --run-for 0.2 \
-            --report build/campaign.json
+          if [[ "${CAMPAIGN_SWEEP}" == "true" ]]; then
+            python tools/campaign.py \
+              --sweep 0,64,512,4096 \
+              --count "${CAMPAIGN_COUNT}" \
+              --jobs 4 \
+              --run-for 0.2 \
+              --report build/campaign.json
+          else
+            python tools/campaign.py \
+              --count "${CAMPAIGN_COUNT}" \
+              --jobs 4 \
+              --run-for 0.2 \
+              --report build/campaign.json
+          fi
 
       - name: Upload test report
         if: always()

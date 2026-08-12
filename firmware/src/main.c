@@ -36,15 +36,14 @@
  * time exactly here - filtering, output shaping, telemetry - so this is a model
  * of a real cost, not padding for its own sake.
  *
- * The default is not a guess. `campaign.py --sweep 0,64,512,4096 --count 40`
- * measured, on Renode:
+ * The default is not a guess: it comes from a sweep, and at 4096 the fault
+ * appears in 7 of 400 runs. That is the regime this tool exists for - rare
+ * enough that you cannot catch it by running the thing again, common enough to
+ * be real. Zero is a valid setting and means the baseline, nothing outside the
+ * window.
  *
- *      CONTROL_WORK      0     64    512   4096
- *      runs that tore  100%    70%    15%   2.5%
- *
- * 4096 puts the fault in the regime this tool exists for: rare enough that you
- * cannot catch it by running the thing again, common enough to be real. Zero is
- * a valid setting and means the baseline, nothing outside the window. */
+ * docs/MEASUREMENTS.md carries the numbers and their provenance, including one
+ * retracted set. */
 #ifndef CONTROL_WORK
 #define CONTROL_WORK  4096
 #endif

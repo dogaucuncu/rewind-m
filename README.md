@@ -106,23 +106,22 @@ tick N+1.
 `tools/campaign.py` runs the firmware under many seeds as independent headless Renode
 processes and counts how many runs the fault appears in:
 
-> **Being re-measured.** The earlier figure here was taken while CI was restoring a stale
-> copy of the peripheral script over the checkout, so it did not measure the code in this
-> tree. The cause is fixed; the number returns once it has been measured again.
+```
+400 seeds, 393 clean, 7 torn  (1.75%)
+torn seeds: 55, 130, 145, 322, 329, 374, 380
+```
+
+Those seven seeds are what M5 will have to reproduce from a trace alone.
 
 How rare the fault is depends on how much work the controller does outside the window,
-which is the `CONTROL_WORK` constant. Sweeping it, 40 seeds per point:
-
-| `CONTROL_WORK` | 0 | 64 | 512 | 4096 |
-|---|---|---|---|---|
-| runs that tore | 100% | 70% | 15% | 2.5% |
-
-The default is 4096. That is the regime a replay tool is for: rare enough that running it
-again does not find the bug, common enough to be real.
+which is the `CONTROL_WORK` constant. The default is 4096, chosen from a sweep — see
+[`docs/MEASUREMENTS.md`](docs/MEASUREMENTS.md) for the numbers and when each was taken.
+That is the regime a replay tool is for: rare enough that running it again does not find
+the bug, common enough to be real.
 
 ```bash
-python tools/campaign.py --count 400                  # measure
-python tools/campaign.py --sweep 0,64,512,4096 --count 40   # reproduce the table
+python tools/campaign.py --count 400                        # measure
+python tools/campaign.py --sweep 0,64,512,4096 --count 40   # sweep the knob
 ```
 
 A run that produces no verdict counts as a harness failure, not a pass — across every
@@ -148,7 +147,7 @@ translation libraries).
 | | | Status |
 |---|---|---|
 | M0 | Toolchain, bare-metal target, DWT, seeded sensor peripheral, CI | done |
-| M1 | Deliberate race + seeded injection + N-seed campaign | done, re-measuring |
+| M1 | Deliberate race + seeded injection + N-seed campaign | done — 7/400 |
 | M2 | Oracle ground-truth recording + trace format | |
 | M3 | In-firmware recorder + overhead measurement | |
 | M4 | Differential validation as a CI gate | |
