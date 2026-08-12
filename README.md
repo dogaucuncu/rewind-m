@@ -72,6 +72,17 @@ Renode's hooks are used for something else: recording the same events independen
 ground truth, so that CI can prove the in-firmware recorder did not miss anything. "What
 did you test your recorder against?" has an answer.
 
+That oracle exists now. It records every sensor read, jitter read and interrupt delivery
+from outside the CPU, in the format fixed by [`docs/TRACE-FORMAT.md`](docs/TRACE-FORMAT.md)
+before either producer was written. Until the recorder lands there is nothing to diff
+against, so CI checks the next best thing on every push: the firmware counts the
+non-deterministic inputs it consumed and prints the totals, and those must match the
+oracle's independent count exactly.
+
+```bash
+python tools/verify_oracle.py --count 5
+```
+
 ### Non-determinism is injected on purpose
 
 Renode is deterministic by design. Recording inside a deterministic simulator and replaying
@@ -148,7 +159,7 @@ translation libraries).
 |---|---|---|
 | M0 | Toolchain, bare-metal target, DWT, seeded sensor peripheral, CI | done |
 | M1 | Deliberate race + seeded injection + N-seed campaign | done — 7/400 |
-| M2 | Oracle ground-truth recording + trace format | |
+| M2 | Oracle ground-truth recording + trace format | done |
 | M3 | In-firmware recorder + overhead measurement | |
 | M4 | Differential validation as a CI gate | |
 | M5 | Replay engine + divergence detector | |

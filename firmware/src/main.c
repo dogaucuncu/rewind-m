@@ -58,6 +58,28 @@ static volatile uint32_t g_depth;
 static volatile uint32_t g_depth_inv;
 static volatile uint32_t g_ticks;
 
+/* Counts of the non-deterministic inputs this run consumed. The oracle counts
+ * the same events independently from outside the CPU, and the two must agree
+ * exactly - that check is what makes the recorder's completeness testable
+ * rather than asserted. See docs/TRACE-FORMAT.md.
+ *
+ * No locking: the self-test and the priming read happen before the timer is
+ * enabled, and after that only the ISR touches these. */
+static volatile uint32_t g_sensor_reads;
+static volatile uint32_t g_jitter_reads;
+
+static uint32_t read_sensor(void)
+{
+    g_sensor_reads++;
+    return SENSOR_DR;
+}
+
+static uint32_t read_jitter(void)
+{
+    g_jitter_reads++;
+    return JITTER_DR;
+}
+
 void TIM2_IRQHandler(void);
 
 void TIM2_IRQHandler(void)
@@ -66,7 +88,7 @@ void TIM2_IRQHandler(void)
 
     TIM2_SR = ~TIM_SR_UIF;
 
-    d = SENSOR_DR;
+    d = read_sensor();
 
     g_depth = d;
     /* The bug. A reader scheduled between these two stores observes a torn
@@ -76,7 +98,7 @@ void TIM2_IRQHandler(void)
 
     /* Variable-rate sampling: the next period carries seeded jitter, so the ISR
      * does not stay phase-locked to the control loop. */
-    TIM2_ARR = TICK_BASE + (JITTER_DR & JITTER_MASK);
+    TIM2_ARR = TICK_BASE + (read_jitter() & JITTER_MASK);
 
     g_ticks++;
 }
@@ -102,7 +124,7 @@ static void selftest(void)
 
     before = dwt_cycles();
     for (i = 0u; i < SELFTEST_SAMPLES; i++) {
-        uint32_t sample = SENSOR_DR;
+        uint32_t sample = read_sensor();
         uart_puts("sensor[");
         uart_put_u32(i);
         uart_puts("]=");
@@ -139,7 +161,7 @@ int main(void)
      * every iteration before the first ISR counts as a tear. That artefact put
      * the measured failure rate at 100% and hid the real race completely. */
     {
-        uint32_t seed_sample = SENSOR_DR;
+        uint32_t seed_sample = read_sensor();
         g_depth = seed_sample;
         g_depth_inv = ~seed_sample;
     }
@@ -200,6 +222,13 @@ int main(void)
     uart_put_u32(torn);
     uart_puts(" checksum=");
     uart_put_hex32((uint32_t)control_sum);
+    uart_puts("\r\n");
+
+    /* Cross-checked against the oracle's independent count. */
+    uart_puts("reads sensor=");
+    uart_put_u32(g_sensor_reads);
+    uart_puts(" jitter=");
+    uart_put_u32(g_jitter_reads);
     uart_puts("\r\n");
 
     if (torn == 0u) {

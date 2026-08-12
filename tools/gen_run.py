@@ -81,8 +81,20 @@ mach create "rewind-m-{seed}"
 machine LoadPlatformDescription @{platform}
 sysbus LoadELF @{elf}
 sysbus.usart2 CreateFileBackend @{uart_out}
-emulation RunFor "{run_for}"
+{oracle}emulation RunFor "{run_for}"
 quit
+"""
+
+# Ground-truth recording, from outside the CPU. Renode hooks take a single line
+# of Python, so these are written to need nothing else: no shared state, no
+# helper functions, and no backslashes (the monitor tokenises the line before
+# Python ever sees it, and an escape would not survive).
+#
+# Opening the file per event is not fast. It does not need to be: a run produces
+# a few hundred events, and the oracle is not the thing whose cost is measured.
+ORACLE_TEMPLATE = """# Ground truth for the differential check - see docs/TRACE-FORMAT.md
+sysbus SetHookAfterPeripheralRead sysbus.sensor "open(r'{oracle_out}','a').write(('S %d' if offset == 0 else 'J %d') % value + chr(10))"
+sysbus.cpu AddHookAtInterruptBegin "open(r'{oracle_out}','a').write('I %d' % exceptionIndex + chr(10))"
 """
 
 DEFAULT_ELF = REPO / "firmware" / "build" / "rewind-m.elf"
@@ -113,6 +125,7 @@ def generate_resc(
     uart_out: pathlib.Path,
     run_for: str = "0.5",
     elf: pathlib.Path | None = None,
+    oracle_out: pathlib.Path | None = None,
 ) -> pathlib.Path:
     """Emit a headless run script for one seed.
 
@@ -128,6 +141,12 @@ def generate_resc(
     if not elf_path.exists():
         raise SystemExit(f"{elf_path}: not built. Run `make -C firmware` first.")
 
+    oracle_block = ""
+    if oracle_out is not None:
+        oracle_block = ORACLE_TEMPLATE.format(
+            oracle_out=oracle_out.resolve().as_posix()
+        )
+
     resc_path = out_dir / f"run_{seed}.resc"
     resc_path.write_text(
         RESC_TEMPLATE.format(
@@ -136,6 +155,7 @@ def generate_resc(
             elf=elf_path.as_posix(),
             uart_out=uart_out.resolve().as_posix(),
             run_for=run_for,
+            oracle=oracle_block,
         ),
         encoding="utf-8",
     )

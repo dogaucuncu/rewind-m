@@ -66,7 +66,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/renode
-          key: renode-${{ env.RENODE_VERSION }}-linux-portable-dotnet-v2
+          key: renode-${{ env.RENODE_VERSION }}-linux-portable-dotnet-v3
 
       - name: Download and verify Renode
         if: steps.cache-renode.outputs.cache-hit != 'true'
@@ -99,6 +99,15 @@ jobs:
         env:
           RENODE_DIR: ${{ runner.temp }}/renode
         run: scripts/test.sh
+
+      # M2: the emulator's ground truth against the firmware's own count of the
+      # inputs it consumed. There is no recorder to compare against yet, but if
+      # these two disagree then one of them is wrong, and knowing that now is
+      # cheaper than discovering it in M4 with a recorder in between to blame.
+      - name: Verify oracle against firmware counts
+        env:
+          RENODE_DIR: ${{ runner.temp }}/renode
+        run: python tools/verify_oracle.py --count 5
 
       # Every push runs a short campaign. It deliberately does NOT assert a
       # failure rate: at the measured 1.75%, a 100-seed run sees zero failures
