@@ -3,7 +3,8 @@
 #
 # Runs inside Renode as a Python peripheral. That interpreter is IronPython with
 # Python 2 semantics, and it rejects non-ASCII source without a PEP 263 encoding
-# declaration, so this file stays strictly ASCII. Keep it that way.
+# declaration, so this file stays strictly ASCII. Keep it that way; the generator
+# refuses to emit anything else.
 #
 # State persists between requests, so the PRNG stream is continuous across a run.
 #
@@ -13,14 +14,26 @@
 
 SEED = 20260812
 
-if request.isInit:
+# Renode renamed the request attributes between 1.16.0 (isInit/isRead/value) and
+# 1.16.1 (IsInit/IsRead/Value). Supporting both costs three lines and turns an
+# obscure 'PythonRequest object has no attribute' crash into a non-event.
+NEW_API = hasattr(request, 'IsInit')
+
+if NEW_API:
+    is_init = request.IsInit
+    is_read = request.IsRead
+else:
+    is_init = request.isInit
+    is_read = request.isRead
+
+if is_init:
     rng_state = (SEED * 2654435761) & 0xFFFFFFFF
     if rng_state == 0:
         rng_state = 0x1234567  # xorshift is absorbing at zero
     baseline = 2048
     sample_count = 0
 
-elif request.isRead:
+elif is_read:
     # xorshift32, chosen over anything fancier because the replay side has to be
     # able to state plainly that it does NOT reproduce this stream.
     rng_state ^= (rng_state << 13) & 0xFFFFFFFF
@@ -41,5 +54,9 @@ elif request.isRead:
     elif value > 4095:
         value = 4095
 
-    request.value = value
+    if NEW_API:
+        request.Value = value
+    else:
+        request.value = value
+
     sample_count += 1
