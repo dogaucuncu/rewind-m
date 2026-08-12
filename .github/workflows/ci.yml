@@ -60,13 +60,20 @@ jobs:
       # job answers "how rare can this race be made?" without one CI round trip
       # per candidate value. No rate is asserted yet - this run exists to find
       # out what the rates are.
+      # Every push runs a short campaign. It deliberately does NOT assert a
+      # failure rate: at ~2.5% a 100-seed run sees zero failures often enough
+      # that such a gate would flake, and a flaky gate teaches people to ignore
+      # CI. What is asserted is that every run produced a verdict - a run we
+      # cannot read is a harness failure, not a pass.
+      #
+      # The headline number comes from the larger on-demand run below.
       - name: Measure race failure rate
         env:
           RENODE_DIR: ${{ github.workspace }}/renode
+          CAMPAIGN_COUNT: ${{ github.event_name == 'workflow_dispatch' && '400' || '100' }}
         run: |
           python tools/campaign.py \
-            --sweep 0,64,512,4096 \
-            --count 40 \
+            --count "${CAMPAIGN_COUNT}" \
             --jobs 4 \
             --run-for 0.2 \
             --report build/campaign.json

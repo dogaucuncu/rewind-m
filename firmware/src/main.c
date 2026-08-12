@@ -36,11 +36,17 @@
  * time exactly here - filtering, output shaping, telemetry - so this is a model
  * of a real cost, not padding for its own sake.
  *
- * tools/campaign.py --sweep measures the rate for a range of values; the
- * default below is whatever that measurement selected. Zero is a valid setting
- * and means the baseline: nothing outside the window. */
+ * The default is not a guess. `campaign.py --sweep 0,64,512,4096 --count 40`
+ * measured, on Renode:
+ *
+ *      CONTROL_WORK      0     64    512   4096
+ *      runs that tore  100%    70%    15%   2.5%
+ *
+ * 4096 puts the fault in the regime this tool exists for: rare enough that you
+ * cannot catch it by running the thing again, common enough to be real. Zero is
+ * a valid setting and means the baseline, nothing outside the window. */
 #ifndef CONTROL_WORK
-#define CONTROL_WORK  64
+#define CONTROL_WORK  4096
 #endif
 
 /* Bounds the run even if TIM2 never fires, so a broken timer model shows up as
