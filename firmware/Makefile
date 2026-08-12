@@ -18,10 +18,13 @@ CPUFLAGS := -mcpu=cortex-m4 -mthumb -mfloat-abi=soft
 
 # -O1, not -O2: the deliberate race in M1 must survive optimisation, and -O0
 # would make the recorder's cycle-cost measurements meaningless.
+# EXTRA_CFLAGS lets the campaign runner sweep -DCONTROL_WORK=N without editing
+# the source, so calibrating how rare the race is costs one CI run, not one per
+# candidate value.
 CFLAGS  := $(CPUFLAGS) -O1 -g3 -std=c11 \
            -Wall -Wextra -Werror -Wshadow -Wundef \
            -ffunction-sections -fdata-sections \
-           -fno-common -fno-builtin
+           -fno-common -fno-builtin $(EXTRA_CFLAGS)
 
 LDFLAGS := $(CPUFLAGS) -T stm32f407.ld -nostdlib -nostartfiles \
            -Wl,--gc-sections -Wl,-Map=$(TARGET).map

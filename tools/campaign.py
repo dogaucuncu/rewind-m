@@ -121,10 +121,60 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
     }
 
 
+def rebuild(control_work: int) -> None:
+    """Rebuild the firmware with a given CONTROL_WORK, for sweeps."""
+    subprocess.run(
+        ["make", "-C", str(REPO / "firmware"), "clean"],
+        check=True, capture_output=True, text=True,
+    )
+    proc = subprocess.run(
+        ["make", "-C", str(REPO / "firmware"),
+         f"EXTRA_CFLAGS=-DCONTROL_WORK={control_work}u"],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        raise SystemExit(f"build failed for CONTROL_WORK={control_work}:\n{proc.stderr}")
+
+
+def run_seeds(renode: str, seeds: list[int], args) -> list[dict]:
+    results: list[dict] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        futures = {
+            pool.submit(run_one, renode, seed, args.work, args.run_for): seed
+            for seed in seeds
+        }
+        for done, future in enumerate(concurrent.futures.as_completed(futures), 1):
+            results.append(future.result())
+            if done % 25 == 0 or done == len(seeds):
+                print(f"  {done}/{len(seeds)}", flush=True)
+    results.sort(key=lambda r: r["seed"])
+    return results
+
+
+def summarise(results: list[dict]) -> dict:
+    counts: dict[str, int] = {}
+    for result in results:
+        counts[result["outcome"]] = counts.get(result["outcome"], 0) + 1
+    total = len(results)
+    torn = counts.get(OUTCOME_TORN, 0)
+    return {
+        "total": total,
+        "counts": counts,
+        "torn": torn,
+        "torn_rate": torn / total if total else 0.0,
+        "broken": total - counts.get(OUTCOME_OK, 0) - torn,
+        "torn_seeds": [r["seed"] for r in results if r["outcome"] == OUTCOME_TORN],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--start", type=int, default=1, help="first seed")
     parser.add_argument("--count", type=int, default=100, help="number of seeds")
+    parser.add_argument(
+        "--sweep",
+        help="comma-separated CONTROL_WORK values; rebuilds and measures each",
+    )
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     parser.add_argument("--renode-dir", default=os.environ.get("RENODE_DIR"))
     parser.add_argument("--run-for", default="0.5", help="emulated seconds per run")
@@ -144,31 +194,53 @@ def main() -> int:
 
     renode = find_renode(args.renode_dir)
     seeds = list(range(args.start, args.start + args.count))
-    print(f"running {len(seeds)} seeds on {args.jobs} workers using {renode}")
-
-    results: list[dict] = []
     started = time.monotonic()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = {
-            pool.submit(run_one, renode, seed, args.work, args.run_for): seed
-            for seed in seeds
-        }
-        for done, future in enumerate(concurrent.futures.as_completed(futures), 1):
-            results.append(future.result())
-            if done % 25 == 0 or done == len(seeds):
-                print(f"  {done}/{len(seeds)}", flush=True)
 
-    results.sort(key=lambda r: r["seed"])
-    counts: dict[str, int] = {}
-    for result in results:
-        counts[result["outcome"]] = counts.get(result["outcome"], 0) + 1
+    sweep_values = None
+    if args.sweep:
+        sweep_values = [int(v) for v in args.sweep.split(",") if v.strip()]
 
-    torn = counts.get(OUTCOME_TORN, 0)
-    total = len(results)
-    rate = torn / total if total else 0.0
-    broken = total - counts.get(OUTCOME_OK, 0) - torn
+    passes: list[dict] = []
+    if sweep_values:
+        print(f"sweeping CONTROL_WORK over {sweep_values}, {len(seeds)} seeds each")
+        for value in sweep_values:
+            print(f"\n-- CONTROL_WORK={value}")
+            rebuild(value)
+            results = run_seeds(renode, seeds, args)
+            summary = summarise(results)
+            summary["control_work"] = value
+            summary["results"] = results
+            passes.append(summary)
+            print(
+                f"   torn {summary['torn']}/{summary['total']}"
+                f"  ({summary['torn_rate'] * 100:.2f}%)"
+                f"  broken {summary['broken']}"
+            )
+    else:
+        print(f"running {len(seeds)} seeds on {args.jobs} workers using {renode}")
+        results = run_seeds(renode, seeds, args)
+        summary = summarise(results)
+        summary["results"] = results
+        passes.append(summary)
+
+    final = passes[-1]
+    counts = final["counts"]
+    total = final["total"]
+    torn = final["torn"]
+    rate = final["torn_rate"]
+    broken = final["broken"]
+    failing = final["torn_seeds"]
 
     print()
+    if sweep_values:
+        print(f"{'CONTROL_WORK':>13} {'torn':>6} {'seeds':>6} {'rate':>8} {'broken':>7}")
+        for summary in passes:
+            print(
+                f"{summary['control_work']:>13} {summary['torn']:>6} "
+                f"{summary['total']:>6} {summary['torn_rate'] * 100:>7.2f}% "
+                f"{summary['broken']:>7}"
+            )
+        print()
     print(f"seeds          : {total}")
     print(f"clean runs     : {counts.get(OUTCOME_OK, 0)}")
     print(f"torn runs      : {torn}  ({rate * 100:.2f}%)")
@@ -177,7 +249,6 @@ def main() -> int:
             print(f"{outcome:<15}: {counts[outcome]}")
     print(f"wall clock     : {time.monotonic() - started:.1f}s")
 
-    failing = [r["seed"] for r in results if r["outcome"] == OUTCOME_TORN]
     if failing:
         shown = ", ".join(str(s) for s in failing[:20])
         suffix = " ..." if len(failing) > 20 else ""
@@ -188,11 +259,15 @@ def main() -> int:
         args.report.write_text(
             json.dumps(
                 {
+                    "sweep": sweep_values,
+                    "passes": [
+                        {k: v for k, v in p.items() if k != "results"} for p in passes
+                    ],
                     "total": total,
                     "counts": counts,
                     "torn_rate": rate,
                     "torn_seeds": failing,
-                    "results": results,
+                    "results": final["results"],
                 },
                 indent=2,
             ),

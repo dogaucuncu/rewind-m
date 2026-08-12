@@ -29,6 +29,19 @@
 #define KP            4
 #define KI            1
 
+/* How much non-critical work the controller does per iteration, outside the
+ * two shared-state reads. This is the knob that sets how often the race is hit:
+ * the fault needs the ISR to land in the short window between the reads, so
+ * widening everything else makes it rarer. Real controllers spend most of their
+ * time exactly here - filtering, output shaping, telemetry - so this is a model
+ * of a real cost, not padding for its own sake.
+ *
+ * tools/campaign.py --sweep measures the rate for a range of values; the
+ * default below is whatever that measurement selected. */
+#ifndef CONTROL_WORK
+#define CONTROL_WORK  64u
+#endif
+
 /* Bounds the run even if TIM2 never fires, so a broken timer model shows up as
  * a reported failure instead of a CI job that hangs until the runner times out. */
 #define MAX_ITERS     20000000u
@@ -115,6 +128,16 @@ int main(void)
 
     selftest();
 
+    /* Publish a consistent pair before the first tick. Without this the loop
+     * sees g_depth == 0 against g_depth_inv == 0 - which fails the check - and
+     * every iteration before the first ISR counts as a tear. That artefact put
+     * the measured failure rate at 100% and hid the real race completely. */
+    {
+        uint32_t seed_sample = SENSOR_DR;
+        g_depth = seed_sample;
+        g_depth_inv = ~seed_sample;
+    }
+
     tim2_init();
 
     while (g_ticks < TARGET_TICKS) {
@@ -123,12 +146,22 @@ int main(void)
         int32_t error;
         int32_t control;
 
+        uint32_t work;
+
         depth = g_depth;
 
-        /* The window. Real work, not padding: this is what a depth-hold PI
-         * controller costs, and its duration is what makes the race rare
-         * rather than constant. */
+        /* The window: the few instructions between the two reads of the shared
+         * pair. An ISR landing here publishes a new sample in the middle of our
+         * snapshot. */
         error = SETPOINT - (int32_t)depth;
+
+        depth_inv = g_depth_inv;
+
+        if (depth != (uint32_t)~depth_inv) {
+            torn++;
+        }
+
+        /* Everything below is outside the window. */
         integral += error;
         if (integral > 100000) {
             integral = 100000;
@@ -138,10 +171,8 @@ int main(void)
         control = (KP * error) + ((KI * integral) >> 4);
         control_sum += control >> 8;
 
-        depth_inv = g_depth_inv;
-
-        if (depth != (uint32_t)~depth_inv) {
-            torn++;
+        for (work = 0u; work < CONTROL_WORK; work++) {
+            control_sum += (int32_t)(work ^ (uint32_t)control);
         }
 
         iters++;

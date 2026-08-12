@@ -56,15 +56,19 @@ jobs:
           RENODE_DIR: ${{ github.workspace }}/renode
         run: scripts/test.sh
 
-      # The measurement the headline claim rests on. No rate is asserted yet -
-      # the first job of this step is to find out what the rate actually is.
+      # The measurement the headline claim rests on. Sweeping CONTROL_WORK in one
+      # job answers "how rare can this race be made?" without one CI round trip
+      # per candidate value. No rate is asserted yet - this run exists to find
+      # out what the rates are.
       - name: Measure race failure rate
         env:
           RENODE_DIR: ${{ github.workspace }}/renode
         run: |
           python tools/campaign.py \
-            --count 200 \
+            --sweep 0,64,512,4096 \
+            --count 40 \
             --jobs 4 \
+            --run-for 0.2 \
             --report build/campaign.json
 
       - name: Upload test report
