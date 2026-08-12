@@ -138,12 +138,11 @@ tick N+1.
 `tools/campaign.py` runs the firmware under many seeds as independent headless Renode
 processes and counts how many runs the fault appears in:
 
-```
-400 seeds, 393 clean, 7 torn  (1.75%)
-torn seeds: 55, 130, 145, 322, 329, 374, 380
-```
-
-Those seven seeds are what M5 will have to reproduce from a trace alone.
+> **Being re-measured.** That rate was taken on a build without the recorder in it. Adding
+> the recorder changed the timing enough that those seeds no longer hit the race — which is
+> a real property of on-device recording, not an accident, and is written up in
+> [`docs/LIMITS.md`](docs/LIMITS.md#the-recorder-changes-the-timing-it-records). The number
+> returns once it has been measured on the build that ships.
 
 How rare the fault is depends on how much work the controller does outside the window,
 which is the `CONTROL_WORK` constant. The default is 4096, chosen from a sweep — see

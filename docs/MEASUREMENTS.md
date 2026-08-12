@@ -8,11 +8,21 @@ workers, 0.2 emulated seconds per seed, `tools/campaign.py`.
 
 ## Failure rate of the torn-read race
 
-| Date | Seeds | Torn | Rate | Torn seeds | Status |
-|---|---|---|---|---|---|
-| 2026-08-12 | 400 | 7 | 1.75% | 55, 130, 145, 322, 329, 374, 380 | **current** |
-| 2026-08-12 | 100 | 1 | 1.00% | 55 | current, per-push gate |
-| 2026-08-12 | 400 | 5 | 1.25% | 39, 127, 269, 308, 397 | **retracted** — see below |
+| Date | Build | Seeds | Torn | Rate | Torn seeds | Status |
+|---|---|---|---|---|---|---|
+| 2026-08-12 | with recorder | 400 | _re-measuring_ | | | in progress |
+| 2026-08-12 | no recorder | 400 | 7 | 1.75% | 55, 130, 145, 322, 329, 374, 380 | **superseded** - see below |
+| 2026-08-12 | no recorder | 100 | 1 | 1.00% | 55 | superseded |
+| 2026-08-12 | no recorder, stale peripheral | 400 | 5 | 1.25% | 39, 127, 269, 308, 397 | **retracted** - see below |
+
+**The rate depends on whether the recorder is in the build, so the build is now part of the
+measurement.** Every one of the seven seeds above passes cleanly once the recorder is
+present: reproduced faithfully from its trace, but as a clean run. The instrumentation costs
+cycles, and a race that turns on where an interrupt lands relative to a few instructions is
+sensitive to exactly that. See [`LIMITS.md`](LIMITS.md#the-recorder-changes-the-timing-it-records).
+
+Rows marked superseded were correct for the build they were taken on. They are kept because
+"this number changed when we added instrumentation" is the interesting part.
 
 Zero runs in any campaign failed to produce a verdict.
 

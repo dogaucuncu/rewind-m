@@ -49,6 +49,30 @@ The honest summary: replay never sees the seed, which is what makes the reproduc
 non-circular. But a reader should know that simulation makes the job easier than hardware
 would, and the design does not take the discount.
 
+## The recorder changes the timing it records
+
+Adding the recorder changed which runs hit the race. The seven seeds the campaign found the
+fault in before M3 all pass cleanly with the recorder present — reproduced faithfully from
+their traces, but reproduced as clean runs, because with the extra instrumentation the
+interrupt no longer lands in the window on those particular runs.
+
+This is not a bug in the recorder and it is not something a smaller recorder would remove.
+Any on-device instrumentation costs cycles, and a race whose outcome depends on where an
+interrupt falls relative to a few instructions is sensitive to exactly that. The same
+applies to TARDIS or to any other software-only approach.
+
+What it means in practice:
+
+- A fault found *without* the recorder may not reproduce *with* it. The recorder has to be
+  present in the build that is being debugged, from the start, not switched on after a
+  failure has been seen.
+- Failure rates measured with and without the recorder are different measurements and are
+  not interchangeable. Every rate in [`MEASUREMENTS.md`](MEASUREMENTS.md) says which build
+  it came from.
+- What the recorder does guarantee is that whatever the instrumented build does, it can be
+  reproduced from its own trace. That is a narrower claim than "reproduces any fault", and
+  it is the claim this project supports.
+
 ## What the oracle cannot check
 
 The oracle confirms the recorder captured every event, in order, with the right values — for
