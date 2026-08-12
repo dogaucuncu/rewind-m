@@ -32,7 +32,28 @@ DEFAULT_WORK = REPO / "build" / "recorder"
 
 COST_RE = re.compile(r"^recorder cycles_per_event=(\d+) capacity=(\d+)$", re.MULTILINE)
 TRACE_RE = re.compile(r"^trace bytes=(\d+) dropped=(\d+)$", re.MULTILINE)
-INSTR_RE = re.compile(r"INSTRUCTIONS_BEGIN\s+(\d+)", re.MULTILINE)
+INSTR_MARKER = "INSTRUCTIONS_BEGIN"
+
+
+def parse_instructions(console: str) -> tuple[int | None, str]:
+    """Pull the executed-instruction count out of Renode's console output.
+
+    The monitor echoes commands as well as their results and pads with prompts,
+    so rather than assume a layout this scans forward from the marker for the
+    first standalone integer. Returns the tail it looked at as well, so a miss
+    reports what was actually there instead of just 'unknown'.
+    """
+    index = console.find(INSTR_MARKER)
+    if index < 0:
+        return None, ""
+    tail = console[index + len(INSTR_MARKER):index + len(INSTR_MARKER) + 400]
+    for token in re.findall(r"\d[\d,]*", tail):
+        value = int(token.replace(",", ""))
+        # Guard against picking up a timestamp or a port number: a run executes
+        # far more instructions than that.
+        if value > 10000:
+            return value, tail
+    return None, tail
 
 
 def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
@@ -73,7 +94,9 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
 
     cost = COST_RE.search(uart)
     stats = TRACE_RE.search(uart)
-    instructions = INSTR_RE.search(proc.stdout or "")
+    instructions, instr_tail = parse_instructions(
+        (proc.stdout or "") + (proc.stderr or "")
+    )
 
     result.update(
         device_events=len(device),
@@ -82,8 +105,10 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
         truncated=header["truncated"],
         cycles_per_event=int(cost.group(1)) if cost else None,
         dropped=int(stats.group(2)) if stats else None,
-        instructions=int(instructions.group(1)) if instructions else None,
+        instructions=instructions,
     )
+    if instructions is None:
+        result["instr_tail"] = " ".join(instr_tail.split())[:200]
     if result["instructions"]:
         result["bytes_per_kinsn"] = round(
             len(data) * 1000.0 / result["instructions"], 4
@@ -153,6 +178,8 @@ def main() -> int:
                 f"cycles/event={result['cycles_per_event']} "
                 + (f"bytes/1k-insn={per_k}" if per_k else "instructions=unknown")
             )
+            if per_k is None and result.get("instr_tail"):
+                print(f"    console after marker: {result['instr_tail']}")
 
     if status:
         print(
