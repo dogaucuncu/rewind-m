@@ -3,8 +3,8 @@
 Deterministic record and replay for bare-metal Cortex-M firmware.
 
 Record every non-deterministic input a firmware sees during a run — sensor samples,
-interrupt arrivals — then reproduce that exact run later, bit for bit, from the trace
-alone. The point is to take a fault that happens in 7 runs out of 3000 and make it
+interrupt arrivals — then reproduce that exact run later, event for event, from the trace
+alone. The point is to take a fault that shows up in a small percentage of runs and make it
 reproducible on demand.
 
 No hardware required. Everything runs on [Renode](https://renode.io/); `make` and one
@@ -57,9 +57,10 @@ RECORD
                      "did the recorder miss a single event?"
 
 REPLAY — never sees the seed, reads only trace.bin
-   same binary + recorded values forced in
-   + interrupts forced at recorded positions
-   + DIVERGENCE DETECTOR: if event N does not match, fail loudly
+   same binary + recorded values fed back in
+   + interrupts VERIFIED at recorded positions, not forced
+   + the replay records its own trace, which must match the original
+   + running out of recorded values is a failure, not a zero
 ```
 
 ### The product is in the firmware; the emulator only validates it
