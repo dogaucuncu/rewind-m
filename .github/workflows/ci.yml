@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  RENODE_VERSION: 1.16.1
+  SEED: 20260812
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi
+
+      - name: Build firmware
+        run: make -C firmware
+
+      - name: Report firmware size
+        run: make -C firmware size
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Renode
+        id: cache-renode
+        uses: actions/cache@v4
+        with:
+          path: renode
+          key: renode-${{ env.RENODE_VERSION }}-linux-portable-dotnet
+
+      - name: Download Renode
+        if: steps.cache-renode.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o renode.tar.gz \
+            "https://github.com/renode/renode/releases/download/v${RENODE_VERSION}/renode-${RENODE_VERSION}.linux-portable-dotnet.tar.gz"
+          mkdir -p renode
+          tar xf renode.tar.gz -C renode --strip-components=1
+
+      - name: Install test dependencies
+        run: pip install -r renode/tests/requirements.txt
+
+      - name: Generate Renode platform for this run
+        run: python tools/gen_run.py --seed "${SEED}"
+
+      - name: Run Renode test suite
+        run: ./renode/renode-test "${GITHUB_WORKSPACE}/tests/m0_smoke.robot"
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-report
+          path: |
+            report.html
+            log.html
+            robot_output.xml
+          if-no-files-found: ignore

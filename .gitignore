@@ -1,0 +1,13 @@
+build/
+.venv/
+*.elf
+*.bin
+*.map
+*.o
+
+# Renode / Robot Framework test output
+robot_output.xml
+log.html
+report.html
+*.robot.log
+snapshots/

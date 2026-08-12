@@ -1,0 +1,8 @@
+# The build and test path runs on Linux in CI. CRLF in a Makefile breaks recipes
+# and CRLF in a shell script breaks the shebang, so line endings are pinned here
+# rather than left to each developer's core.autocrlf.
+* text=auto eol=lf
+
+*.png binary
+*.bin binary
+*.elf binary
