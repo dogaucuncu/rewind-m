@@ -106,12 +106,9 @@ tick N+1.
 `tools/campaign.py` runs the firmware under many seeds as independent headless Renode
 processes and counts how many runs the fault appears in:
 
-```
-400 seeds, 395 clean, 5 torn  (1.25%)
-torn seeds: 39, 127, 269, 308, 397
-```
-
-Those five seeds are what M5 will have to reproduce from a trace alone.
+> **Being re-measured.** The earlier figure here was taken while CI was restoring a stale
+> copy of the peripheral script over the checkout, so it did not measure the code in this
+> tree. The cause is fixed; the number returns once it has been measured again.
 
 How rare the fault is depends on how much work the controller does outside the window,
 which is the `CONTROL_WORK` constant. Sweeping it, 40 seeds per point:
@@ -151,7 +148,7 @@ translation libraries).
 | | | Status |
 |---|---|---|
 | M0 | Toolchain, bare-metal target, DWT, seeded sensor peripheral, CI | done |
-| M1 | Deliberate race + seeded injection + N-seed campaign | done — 5/400 |
+| M1 | Deliberate race + seeded injection + N-seed campaign | done, re-measuring |
 | M2 | Oracle ground-truth recording + trace format | |
 | M3 | In-firmware recorder + overhead measurement | |
 | M4 | Differential validation as a CI gate | |

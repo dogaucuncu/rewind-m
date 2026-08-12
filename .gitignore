@@ -1,15 +1,58 @@
+# Build output
 build/
-.venv/
-__pycache__/
-*.pyc
 *.elf
 *.bin
 *.map
 *.o
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
 
 # Renode / Robot Framework test output
 robot_output.xml
 log.html
 report.html
 *.robot.log
+logs/
 snapshots/
+
+# A Renode installation must never live inside the repository: the CI cache
+# once covered ./renode and restored a stale copy of our own peripheral script
+# over the checkout. These entries are belt and braces - CI now installs Renode
+# outside the workspace entirely.
+/renode-dist/
+/renode/scripts/
+/renode/tests/
+/renode/platforms/
+/renode/plugins/
+/renode/licenses/
+/renode/*.dll
+/renode/renode
+/renode/renode-test
+
+# Secrets and credentials - nothing here is expected to exist, these are a
+# backstop so an accidental file cannot be committed without noticing.
+.env
+.env.*
+*.env
+secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+.netrc
+.npmrc
+credentials.json
+service-account*.json
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

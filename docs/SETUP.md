@@ -38,10 +38,10 @@ This is not specific to this project's platform file — the stock
 `platforms/boards/stm32f4_discovery.repl` fails the same way.
 
 The official `renode-1.16.1.windows-portable-dotnet.zip` bundles the native libraries inside
-a single self-contained executable and extracts them at runtime. On a machine running
-Norton 360 this still failed with the same symbol-resolution error, which is consistent
-with the antivirus quarantining the freshly extracted, unsigned native library before it
-can be loaded. If you hit this, the options are, in order of robustness:
+a single self-contained executable and extracts them at runtime. On a Windows machine with
+commercial endpoint protection running, this still failed with the same symbol-resolution
+error — consistent with an antivirus quarantining the freshly extracted, unsigned native
+library before it can be loaded. If you hit this, the options are, in order of robustness:
 
 1. **Use WSL2 with Ubuntu** and follow the Linux instructions. This is also exactly what CI
    runs, so local results and CI results cannot drift.

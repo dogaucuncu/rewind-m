@@ -31,45 +31,61 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Renode is installed OUTSIDE the workspace. It used to be unpacked into
+      # ./renode, which is also where this project's own peripheral scripts
+      # live, so the cache covered them: the archive saved on the first green
+      # run carried renode/sensor.py, and every later run restored that stale
+      # copy over the checkout. Nothing failed - the old script just answered
+      # every offset with a sensor sample - so the measurements were quietly
+      # taken against code that was not in the tree. Keeping the installation
+      # out of the repository makes that class of bug impossible rather than
+      # fixed.
       - name: Cache Renode
         id: cache-renode
         uses: actions/cache@v4
         with:
-          path: renode
-          key: renode-${{ env.RENODE_VERSION }}-linux-portable-dotnet
+          path: ${{ runner.temp }}/renode
+          key: renode-${{ env.RENODE_VERSION }}-linux-portable-dotnet-v2
 
       - name: Download Renode
         if: steps.cache-renode.outputs.cache-hit != 'true'
         run: |
-          curl -fsSL -o renode.tar.gz \
+          curl -fsSL -o "${RUNNER_TEMP}/renode.tar.gz" \
             "https://github.com/renode/renode/releases/download/v${RENODE_VERSION}/renode-${RENODE_VERSION}.linux-portable-dotnet.tar.gz"
-          mkdir -p renode
-          tar xf renode.tar.gz -C renode --strip-components=1
+          mkdir -p "${RUNNER_TEMP}/renode"
+          tar xf "${RUNNER_TEMP}/renode.tar.gz" -C "${RUNNER_TEMP}/renode" --strip-components=1
 
       - name: Install test dependencies
-        run: pip install -r renode/tests/requirements.txt
+        run: pip install -r "${RUNNER_TEMP}/renode/tests/requirements.txt"
+
+      # Catches any tool that writes into the checkout behind our backs. This is
+      # the guard that would have caught the cache overwriting renode/sensor.py.
+      - name: Verify tooling did not modify the checkout
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "Working tree was modified after checkout:"
+            git status --porcelain
+            git diff
+            exit 1
+          fi
 
       # Deliberately goes through scripts/test.sh rather than calling renode-test
       # directly: the path documented in the README is the path CI proves.
       - name: Run Renode test suite
         env:
-          RENODE_DIR: ${{ github.workspace }}/renode
+          RENODE_DIR: ${{ runner.temp }}/renode
         run: scripts/test.sh
 
-      # The measurement the headline claim rests on. Sweeping CONTROL_WORK in one
-      # job answers "how rare can this race be made?" without one CI round trip
-      # per candidate value. No rate is asserted yet - this run exists to find
-      # out what the rates are.
       # Every push runs a short campaign. It deliberately does NOT assert a
-      # failure rate: at ~2.5% a 100-seed run sees zero failures often enough
-      # that such a gate would flake, and a flaky gate teaches people to ignore
-      # CI. What is asserted is that every run produced a verdict - a run we
-      # cannot read is a harness failure, not a pass.
+      # failure rate: at a rate of a few percent, a 100-seed run sees zero
+      # failures often enough that such a gate would flake, and a flaky gate
+      # teaches people to ignore CI. What is asserted is that every run produced
+      # a verdict - a run we cannot read is a harness failure, not a pass.
       #
-      # The headline number comes from the larger on-demand run below.
+      # The headline number comes from the larger workflow_dispatch run.
       - name: Measure race failure rate
         env:
-          RENODE_DIR: ${{ github.workspace }}/renode
+          RENODE_DIR: ${{ runner.temp }}/renode
           CAMPAIGN_COUNT: ${{ github.event_name == 'workflow_dispatch' && '400' || '100' }}
         run: |
           python tools/campaign.py \
