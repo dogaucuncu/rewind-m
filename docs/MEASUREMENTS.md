@@ -23,11 +23,22 @@ reads, which is what makes the race rare. Sweep, 40 seeds per point:
 
 | Date | `CONTROL_WORK` | 0 | 64 | 512 | 4096 | Status |
 |---|---|---|---|---|---|---|
+| 2026-08-12 | runs that tore | 100% (40/40) | 72.5% (29/40) | 5% (2/40) | 0% (0/40) | **current** |
 | 2026-08-12 | runs that tore | 100% | 70% | 15% | 2.5% | **retracted** — see below |
 
-The default of 4096 was chosen from the retracted sweep. The current 400-seed campaign puts
-that point at 1.75%, close to the 2.5% the sweep reported, so the choice stands — but the
-sweep itself needs re-running before its table is quoted as a measurement of this code.
+**40 seeds cannot resolve the 4096 point, and the table should not be read as if it could.**
+At the rate the 400-seed campaign measured there, 1.75%, the chance of seeing zero failures
+in 40 runs is `0.9825^40`, about 49% — a coin flip. The 0/40 above is that coin landing
+tails, not a disagreement with 7/400.
+
+What the sweep is good for is the shape of the curve: the fault goes from certain, to
+frequent, to occasional, to rare as work moves outside the window. Pinning down the rare end
+takes hundreds of seeds, which is why the per-point sweep and the headline campaign are
+separate runs with different sizes.
+
+The 512 point moved from 15% to 5% between the retracted and current sweeps. That is a real
+change in behaviour, and it is one of the reasons the earlier numbers are retracted rather
+than merely re-stated.
 
 ## Retraction: stale peripheral script in CI, 2026-08-12
 
@@ -48,6 +59,22 @@ failure), which is the evidence that the peripheral behaviour really had been di
 
 Anything measured before that fix is retracted rather than deleted: knowing a number was
 wrong, and why, is worth more than a clean table.
+
+## How many seeds a claim needs
+
+A rate around 2% needs a few hundred seeds before it means anything. Rough guide, for
+spotting a failure at all:
+
+| True rate | Seeds for a ~95% chance of seeing at least one failure |
+|---|---|
+| 10% | 29 |
+| 5% | 59 |
+| 2% | 149 |
+| 1% | 299 |
+
+This is why the per-push CI campaign (100 seeds) does not gate on the failure rate: at 1.75%
+it would report zero failures often enough to make the gate flake. It gates on every run
+having produced a readable verdict instead.
 
 ## Reproducing
 
