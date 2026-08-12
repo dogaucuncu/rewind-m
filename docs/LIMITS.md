@@ -31,6 +31,24 @@ Renode is a functional simulator, not cycle-accurate. Two consequences:
    and gated in CI, but "the instrumented firmware still meets its deadlines on physical
    hardware" is a claim this repository does not support. Validating it needs a board.
 
+## Where interrupts land is implied here, but would not be on hardware
+
+Under Renode, a run is a deterministic function of the firmware image and the seeded input
+values. So once the recorded peripheral reads are fed back, where each interrupt lands
+follows from them — replay does not strictly need the interrupt positions to reproduce the
+run in simulation.
+
+That is a property of the simulator, not of the technique, and leaning on it would make the
+result far less interesting than it looks. On real silicon, interrupt arrival is not a
+function of the values read: it depends on clock drift, bus contention and flash wait
+states. So the recorder captures interrupt delivery positions explicitly (M3), and replay
+checks them rather than deriving them. The cost of recording them is measured and reported
+for the same reason.
+
+The honest summary: replay never sees the seed, which is what makes the reproduction claim
+non-circular. But a reader should know that simulation makes the job easier than hardware
+would, and the design does not take the discount.
+
 ## Divergence, overflow, and other honest failures
 
 - **Ring buffer overflow.** If the recorder cannot keep up, the overflow is written into the

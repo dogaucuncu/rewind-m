@@ -10,10 +10,11 @@ reproducible on demand.
 No hardware required. Everything runs on [Renode](https://renode.io/); `make` and one
 command gets you a running target.
 
-> **Status: M0 — foundations.** The firmware boots, the DWT cycle counter runs, and the
-> seeded sensor peripheral answers reads. The recorder, the replay engine and the
-> differential validation are M3–M5. Nothing in this README claims a capability that is
-> not already in the repository; see [Milestones](#milestones).
+> **Status: M1 — the fault exists and is measured.** There is a firmware with a real
+> intermittent race, and a campaign runner that measures how often it fires. The recorder,
+> the replay engine and the differential validation are M3–M5, so nothing is being replayed
+> yet. Every number below was measured by a tool in this repository; none of them are
+> estimates. See [Milestones](#milestones).
 
 ## Why this exists
 
@@ -94,6 +95,42 @@ missing is a modern, reproducible implementation for bare-metal Cortex-M that an
 clone and run, and a recorder whose completeness is mechanically verified rather than
 asserted. See [`docs/RELATED-WORK.md`](docs/RELATED-WORK.md).
 
+## The fault, measured
+
+The demo firmware is a depth-hold controller. Its TIM2 interrupt publishes each sensor
+sample as two words — the value and its complement — without disabling interrupts. The
+control loop reads the first word, computes its error term, then reads the second. An
+interrupt landing in that window hands the loop one word from tick N and the other from
+tick N+1.
+
+`tools/campaign.py` runs the firmware under many seeds as independent headless Renode
+processes and counts how many runs the fault appears in:
+
+```
+400 seeds, 395 clean, 5 torn  (1.25%)
+torn seeds: 39, 127, 269, 308, 397
+```
+
+Those five seeds are what M5 will have to reproduce from a trace alone.
+
+How rare the fault is depends on how much work the controller does outside the window,
+which is the `CONTROL_WORK` constant. Sweeping it, 40 seeds per point:
+
+| `CONTROL_WORK` | 0 | 64 | 512 | 4096 |
+|---|---|---|---|---|
+| runs that tore | 100% | 70% | 15% | 2.5% |
+
+The default is 4096. That is the regime a replay tool is for: rare enough that running it
+again does not find the bug, common enough to be real.
+
+```bash
+python tools/campaign.py --count 400                  # measure
+python tools/campaign.py --sweep 0,64,512,4096 --count 40   # reproduce the table
+```
+
+A run that produces no verdict counts as a harness failure, not a pass — across every
+campaign run so far, all of them produced one.
+
 ## Build and run
 
 Requirements: `arm-none-eabi-gcc`, `make`, Python 3.11+, and Renode 1.16+.
@@ -101,7 +138,8 @@ Requirements: `arm-none-eabi-gcc`, `make`, Python 3.11+, and Renode 1.16+.
 ```bash
 make -C firmware                       # build the firmware
 python tools/gen_run.py --seed 1234    # generate the Renode platform for a seed
-scripts/test.sh                        # run the test suite under Renode
+scripts/test.sh                        # run the test suites under Renode
+python tools/campaign.py --count 100   # measure the failure rate
 ```
 
 On Windows use Git Bash for `make`; see [`docs/SETUP.md`](docs/SETUP.md) for the toolchain
@@ -112,8 +150,8 @@ translation libraries).
 
 | | | Status |
 |---|---|---|
-| M0 | Toolchain, bare-metal target, DWT, seeded sensor peripheral, CI | in progress |
-| M1 | Deliberate race + seeded injection + N-seed campaign ("3000 runs, 7 failures") | |
+| M0 | Toolchain, bare-metal target, DWT, seeded sensor peripheral, CI | done |
+| M1 | Deliberate race + seeded injection + N-seed campaign | done — 5/400 |
 | M2 | Oracle ground-truth recording + trace format | |
 | M3 | In-firmware recorder + overhead measurement | |
 | M4 | Differential validation as a CI gate | |
