@@ -10,11 +10,11 @@ reproducible on demand.
 No hardware required. Everything runs on [Renode](https://renode.io/); `make` and one
 command gets you a running target.
 
-> **Status: M1 — the fault exists and is measured.** There is a firmware with a real
-> intermittent race, and a campaign runner that measures how often it fires. The recorder,
-> the replay engine and the differential validation are M3–M5, so nothing is being replayed
-> yet. Every number below was measured by a tool in this repository; none of them are
-> estimates. See [Milestones](#milestones).
+> **Status: M3 — recording works and is verified.** There is a firmware with a real
+> intermittent race, a recorder inside it, and an emulator-side oracle that proves the
+> recorder misses nothing. Nothing is replayed yet; the replay engine is M5. Every number
+> below was measured by a tool in this repository, and the ones that turned out worse than
+> the prior art say so. See [Milestones](#milestones).
 
 ## Why this exists
 
@@ -72,15 +72,26 @@ Renode's hooks are used for something else: recording the same events independen
 ground truth, so that CI can prove the in-firmware recorder did not miss anything. "What
 did you test your recorder against?" has an answer.
 
-That oracle exists now. It records every sensor read, jitter read and interrupt delivery
-from outside the CPU, in the format fixed by [`docs/TRACE-FORMAT.md`](docs/TRACE-FORMAT.md)
-before either producer was written. Until the recorder lands there is nothing to diff
-against, so CI checks the next best thing on every push: the firmware counts the
-non-deterministic inputs it consumed and prints the totals, and those must match the
-oracle's independent count exactly.
+Both sides exist now, and CI diffs them on every push:
+
+```
+5 seeds, 609 events each, matched exactly
+trace 3637 bytes · 94 cycles per event · 0.80 bytes per thousand instructions
+```
+
+A dropped, reordered or mangled event moves the sequences apart and the build fails, naming
+the index where they first diverge. Interrupt payloads are excluded from the comparison —
+Renode's hook reports the ARM exception class rather than the Cortex-M exception number, so
+the two sides cannot mean the same thing by that field. Everything else is compared exactly,
+order included.
+
+TARDIS reports 0.5 bytes per thousand instructions; this recorder is at 0.80, with neither
+of the two specified compressions implemented yet. Different workloads, so it is indicative
+rather than a benchmark — but the direction is stated the way it came out.
 
 ```bash
-python tools/verify_oracle.py --count 5
+python tools/verify_recorder.py --count 5   # diff recorder against oracle
+python tools/verify_oracle.py --count 5     # oracle against the firmware's own counts
 ```
 
 ### Non-determinism is injected on purpose

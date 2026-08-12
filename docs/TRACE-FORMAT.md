@@ -109,14 +109,19 @@ Varint is LEB128: seven bits per byte, high bit set while more bytes follow. Del
 than absolute counts because consecutive events are close together, so most deltas fit in
 one or two bytes.
 
-Two compressions are specified and will be measured in M3 rather than assumed to help:
+**Neither of the following is implemented.** They are recorded as candidates, not as
+features, and the measured size in [`MEASUREMENTS.md`](MEASUREMENTS.md) is the size without
+them:
 
-- a repeated payload identical to the previous event of the same kind is written as a
+- a repeated payload identical to the previous event of the same kind, written as a
   zero-length payload
-- reads whose value the firmware could have predicted are not recorded at all
+- not recording reads whose value the firmware could have predicted
 
 The unit for reporting size is **bytes per thousand instructions**, the same unit TARDIS
-reports, so the comparison can be made honestly in either direction.
+reports. On the demo workload this recorder currently costs 0.80 bytes per thousand
+instructions against TARDIS's reported 0.5 — worse, and stated that way round on purpose.
+The workloads differ, so the comparison is indicative rather than a like-for-like benchmark,
+but the number is not going to be dressed up.
 
 ### Gaps
 

@@ -73,6 +73,28 @@ firmware reports for itself:
 against yet — this is the strongest check available until M3, and it is what caught the
 firmware reporting its counters while the timer was still running.
 
+## Recorder against oracle (M3)
+
+Per push, five seeds. The in-firmware recorder's trace is decoded and compared event by
+event against the emulator's independent record of the same run:
+
+| Date | Seeds | Events | Result | Trace bytes | Cycles/event | Bytes per 1k instructions |
+|---|---|---|---|---|---|---|
+| 2026-08-12 | 5 | 609 | match | 3635–3642 | 94 | 0.79–0.80 |
+
+609 events is 209 sensor reads, 200 jitter reads and 200 interrupts. Interrupt payloads are
+excluded from the comparison for the reason given in
+[`TRACE-FORMAT.md`](TRACE-FORMAT.md); everything else is compared exactly, including order.
+
+**Against TARDIS: worse.** TARDIS reports 0.5 bytes per thousand instructions and about 5%
+runtime overhead; this recorder is at 0.80 bytes per thousand instructions with neither of
+the two specified compressions implemented. The workloads are not the same, so this is
+indicative rather than a benchmark — but the direction is what it is, and closing the gap
+would mean implementing the compressions and measuring again rather than arguing about it.
+
+Cycles per event is measured in isolation before the run, driving the recorder in a loop, so
+it includes that loop and is an upper bound.
+
 ## How many seeds a claim needs
 
 A rate around 2% needs a few hundred seeds before it means anything. Rough guide, for
