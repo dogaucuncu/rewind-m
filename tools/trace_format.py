@@ -36,7 +36,25 @@ class Event:
 
     @property
     def key(self) -> tuple[str, int]:
-        """What equality is defined on."""
+        """The event as recorded, payload included."""
+        return (self.kind, self.payload)
+
+    @property
+    def comparable_key(self) -> tuple[str, int | None]:
+        """What the device and the oracle can meaningfully be held to agree on.
+
+        Interrupt payloads are excluded. The device records the Cortex-M
+        exception number from IPSR, which says which interrupt fired. Renode's
+        interrupt hook exposes the classic ARM exception class instead - 5 for
+        any IRQ - so the oracle has no way to produce the same number for any
+        interrupt at all. Comparing them would be comparing two different facts.
+
+        What still holds, and is still checked, is that interrupts appear the
+        same number of times in the same positions: a dropped or reordered
+        interrupt shifts the sequence and fails.
+        """
+        if self.kind == KIND_IRQ:
+            return (self.kind, None)
         return (self.kind, self.payload)
 
 
@@ -166,6 +184,7 @@ def first_divergence(a: list[Event], b: list[Event]) -> tuple[int, Event | None,
     for index in range(max(len(a), len(b))):
         left = a[index] if index < len(a) else None
         right = b[index] if index < len(b) else None
-        if left is None or right is None or left.key != right.key:
+        if (left is None or right is None
+                or left.comparable_key != right.comparable_key):
             return index, left, right
     return None
