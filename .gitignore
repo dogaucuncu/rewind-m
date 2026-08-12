@@ -19,19 +19,13 @@ report.html
 logs/
 snapshots/
 
-# A Renode installation must never live inside the repository: the CI cache
-# once covered ./renode and restored a stale copy of our own peripheral script
-# over the checkout. These entries are belt and braces - CI now installs Renode
-# outside the workspace entirely.
+# renode/ holds this project's own peripheral scripts, nothing else. A Renode
+# installation must never be unpacked there: the CI cache once covered that
+# directory and restored a stale copy of sensor.py over the checkout. CI now
+# installs Renode outside the workspace entirely, and a CI step fails the build
+# if anything modifies tracked files after checkout - which is a real guard,
+# unlike the partial ignore list that used to sit here.
 /renode-dist/
-/renode/scripts/
-/renode/tests/
-/renode/platforms/
-/renode/plugins/
-/renode/licenses/
-/renode/*.dll
-/renode/renode
-/renode/renode-test
 
 # Secrets and credentials - nothing here is expected to exist, these are a
 # backstop so an accidental file cannot be committed without noticing.

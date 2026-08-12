@@ -22,11 +22,11 @@ import argparse
 import os
 import pathlib
 import re
-import subprocess
 import sys
 
 import campaign
 import gen_run
+import renode_run
 import trace_format
 from campaign import find_renode
 
@@ -51,11 +51,7 @@ def probe(renode: str, seed: int, work: pathlib.Path, run_for: str) -> list[str]
     resc = gen_run.generate_resc(
         seed, seed_dir, uart_out, run_for=run_for, oracle_out=oracle_out
     )
-    proc = subprocess.run(
-        [renode, "--console", "--disable-xwt", "--plain",
-         "-e", f"include @{resc.as_posix()}"],
-        capture_output=True, text=True, timeout=300,
-    )
+    proc = renode_run.run_script(renode, resc)
     if not uart_out.exists():
         return [f"no UART output: {(proc.stderr or proc.stdout)[-300:]}"]
 

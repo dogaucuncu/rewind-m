@@ -24,6 +24,7 @@ import sys
 import time
 
 import gen_run
+import renode_run
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 DEFAULT_WORK = REPO / "build" / "campaign"
@@ -95,13 +96,7 @@ def run_one(renode: str, seed: int, work: pathlib.Path, run_for: str) -> dict:
 
     started = time.monotonic()
     try:
-        proc = subprocess.run(
-            [renode, "--console", "--disable-xwt", "--plain",
-             "-e", f"include @{resc.as_posix()}"],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
+        proc = renode_run.run_script(renode, resc)
     except subprocess.TimeoutExpired:
         # One wedged Renode process must not take the whole campaign with it.
         # Losing 400 runs to an unhandled exception on run 399 is a worse
